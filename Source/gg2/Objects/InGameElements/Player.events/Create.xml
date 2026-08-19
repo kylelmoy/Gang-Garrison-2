@@ -20,6 +20,9 @@
     socket = -1;
     name = "";
     kicked = false;
+    isBot = false;
+    botRemovalPending = false;
+    botRemovalDeadline = 0;
     
     // client setting stuff; set to defaults
     queueJump = false;

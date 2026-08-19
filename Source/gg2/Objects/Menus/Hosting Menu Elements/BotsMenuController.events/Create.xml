@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<event category="CREATE" id="0">
+  <actions>
+    <action id="603" library="1">
+      <!--action name: Code-->
+      <kind>CODE</kind>
+      <allowRelative>false</allowRelative>
+      <question>false</question>
+      <canApplyTo>true</canApplyTo>
+      <actionType>CODE</actionType>
+      <functionName/>
+      <relative>false</relative>
+      <not>false</not>
+      <appliesTo>.self</appliesTo>
+      <arguments>
+        <argument kind="STRING">menu_create(48, 172, 500, 260, 32, 40, 112, 128);
+menumode = true;
+
+menu_background(512, 24, 8, 12, 4);
+bgtabs = true;
+
+menu_addedit_boolean(&quot;Enable Bots:&quot;, &quot;global.botsEnabled&quot;, &apos;
+    gg2_write_ini(&quot;Bots&quot;, &quot;Enabled&quot;, argument0);
+&apos;);
+menu_addedit_num(&quot;Fill To Players:&quot;, &quot;global.botFillToPlayers&quot;, &apos;
+    gg2_write_ini(&quot;Bots&quot;, &quot;FillToPlayers&quot;, argument0);
+&apos;, 48);
+menu_addedit_num(&quot;Max Bots:&quot;, &quot;global.botMaxBots&quot;, &apos;
+    gg2_write_ini(&quot;Bots&quot;, &quot;MaxBots&quot;, argument0);
+&apos;, 48);
+menu_addedit_num(&quot;Min Humans:&quot;, &quot;global.botMinHumans&quot;, &apos;
+    gg2_write_ini(&quot;Bots&quot;, &quot;MinHumans&quot;, argument0);
+&apos;, 48);
+menu_addedit_text(&quot;Name Prefix:&quot;, &quot;global.botNamePrefix&quot;, &apos;
+    gg2_write_ini(&quot;Bots&quot;, &quot;NamePrefix&quot;, argument0);
+&apos;);
+menu_addedit_boolean(&quot;Remove On Death:&quot;, &quot;global.botRemoveOnDeath&quot;, &apos;
+    gg2_write_ini(&quot;Bots&quot;, &quot;RemoveOnDeath&quot;, argument0);
+&apos;);
+menu_addedit_num(&quot;Remove Timeout (secs):&quot;, &quot;global.botRemoveTimeoutSeconds&quot;, &apos;
+    gg2_write_ini(&quot;Bots&quot;, &quot;RemoveTimeoutSeconds&quot;, argument0);
+&apos;);
+
+menu_addtablink(&quot;Main&quot;, &apos;
+    instance_create(x,y,HostOptionsController);
+    instance_destroy();
+&apos;);
+menu_addtablink(&quot;Advanced&quot;, &apos;
+    instance_create(x,y,AdvHostOptionsController);
+    instance_destroy();
+&apos;);
+menu_addtablink(&quot;Classlimits&quot;, &apos;
+    instance_create(x,y,ClasslimitsMenuController);
+    instance_destroy();
+&apos;);
+menu_addtablink(&quot;Bots&quot;, &apos;
+    instance_create(x,y,BotsMenuController);
+    instance_destroy();
+&apos;);
+
+menu_addback(&quot;Back&quot;, &apos;
+    instance_create(x,y,MainMenuController);
+    instance_destroy();
+&apos;);
+</argument>
+      </arguments>
+    </action>
+  </actions>
+</event>

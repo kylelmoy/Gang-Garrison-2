@@ -122,6 +122,15 @@
     
     readClasslimitsFromIni();
 
+    global.botsEnabled = ini_read_real("Bots", "Enabled", 0);
+    global.botFillToPlayers = ini_read_real("Bots", "FillToPlayers", 8);
+    global.botMaxBots = ini_read_real("Bots", "MaxBots", 8);
+    global.botMinHumans = ini_read_real("Bots", "MinHumans", 1);
+    global.botNamePrefix = ini_read_string("Bots", "NamePrefix", "[BOT] ");
+    global.botRemoveOnDeath = ini_read_real("Bots", "RemoveOnDeath", 1);
+    global.botRemoveTimeoutSeconds = ini_read_real("Bots", "RemoveTimeoutSeconds", 20);
+    global.botNameCounter = 0;
+
     //thy playerlimit shalt not exceed 48!
     if (global.playerLimit > 48)
     {
@@ -199,6 +208,14 @@
     ini_write_real("Classlimits", "Spy", global.classlimits[CLASS_SPY])
     ini_write_real("Classlimits", "Sniper", global.classlimits[CLASS_SNIPER])
     ini_write_real("Classlimits", "Quote", global.classlimits[CLASS_QUOTE])
+
+    ini_write_real("Bots", "Enabled", global.botsEnabled);
+    ini_write_real("Bots", "FillToPlayers", global.botFillToPlayers);
+    ini_write_real("Bots", "MaxBots", global.botMaxBots);
+    ini_write_real("Bots", "MinHumans", global.botMinHumans);
+    ini_write_string("Bots", "NamePrefix", global.botNamePrefix);
+    ini_write_real("Bots", "RemoveOnDeath", global.botRemoveOnDeath);
+    ini_write_real("Bots", "RemoveTimeoutSeconds", global.botRemoveTimeoutSeconds);
 
     ini_write_real("Settings", "Resolution", global.resolutionkind);
     ini_write_real("Settings", "Framerate", global.frameratekind);

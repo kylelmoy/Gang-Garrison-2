@@ -62,6 +62,10 @@ menu_addtablink("Classlimits", '
     instance_create(x,y,ClasslimitsMenuController);
     instance_destroy();
 ');
+menu_addtablink("Bots", '
+    instance_create(x,y,BotsMenuController);
+    instance_destroy();
+');
 
 menu_addback("Back", '
     instance_create(x,y,MainMenuController);

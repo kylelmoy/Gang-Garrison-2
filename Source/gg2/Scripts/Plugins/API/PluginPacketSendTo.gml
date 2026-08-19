@@ -29,6 +29,10 @@ if (!ds_map_exists(global.pluginPacketBuffers, packetID))
 if (buffer_size(dataBuffer) > 65534)
     return false;
 
+// Bots have no client to receive plugin packets
+if (player.isBot)
+    return true;
+
 // Short-cicuit when sending to self
 if (player == global.myself)
 {

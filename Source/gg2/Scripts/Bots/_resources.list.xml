@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<resources>
+  <resource name="botAdd" type="RESOURCE"/>
+  <resource name="botRemove" type="RESOURCE"/>
+  <resource name="botPickTeam" type="RESOURCE"/>
+  <resource name="botReteamAll" type="RESOURCE"/>
+  <resource name="botPopulationUpdate" type="RESOURCE"/>
+  <resource name="botFindTarget" type="RESOURCE"/>
+  <resource name="botInputUpdate" type="RESOURCE"/>
+</resources>

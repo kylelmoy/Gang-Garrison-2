@@ -80,6 +80,10 @@ menu_addtablink("Classlimits", '
     instance_create(x,y,ClasslimitsMenuController);
     instance_destroy();
 ');
+menu_addtablink("Bots", '
+    instance_create(x,y,BotsMenuController);
+    instance_destroy();
+');
 
 menu_addlink("Start Game", '
     start_server();

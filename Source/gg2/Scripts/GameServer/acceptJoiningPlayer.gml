@@ -13,7 +13,7 @@ if (joiningSocket >= 0)
         clientCount = 1;
         with (Player)
         {
-            if (socket_remote_ip(socket) == ip)
+            if (!isBot and socket_remote_ip(socket) == ip)
                 clientCount += 1;
         }
         with (JoiningPlayer)

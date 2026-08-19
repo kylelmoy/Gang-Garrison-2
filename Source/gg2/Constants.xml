@@ -137,4 +137,11 @@
   <constant name="GEAR_NAVIGATORHAT" value="&quot;NavigatorHat&quot;"/>
   <constant name="GEAR_RAYBANN_CAPE" value="&quot;RaybannCape&quot;"/>
   <constant name="GEAR_HAXXY_CAPE" value="&quot;HaxxyCape&quot;"/>
+  <constant name="KEY_TAUNT" value="$01"/>
+  <constant name="KEY_DOWN" value="$02"/>
+  <constant name="KEY_SPECIAL" value="$08"/>
+  <constant name="KEY_ATTACK" value="$10"/>
+  <constant name="KEY_RIGHT" value="$20"/>
+  <constant name="KEY_LEFT" value="$40"/>
+  <constant name="KEY_JUMP" value="$80"/>
 </constants>

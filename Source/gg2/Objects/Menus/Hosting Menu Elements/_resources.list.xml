@@ -4,4 +4,5 @@
   <resource name="AdvHostOptionsController" type="RESOURCE"/>
   <resource name="HostWarningsController" type="RESOURCE"/>
   <resource name="ClasslimitsMenuController" type="RESOURCE"/>
+  <resource name="BotsMenuController" type="RESOURCE"/>
 </resources>

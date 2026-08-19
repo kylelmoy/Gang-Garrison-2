@@ -2,7 +2,7 @@ with(Player)
 {
     // server's local player doesn't possess an accompanying Client instance and therefore
     // doesn't perform deserializeState() to read and process it from global.serverSocket
-    if (id == global.myself) continue;
+    if (id == global.myself or isBot) continue;
     
     write_buffer(socket, global.sendBuffer);
     socket_send(socket);

@@ -1,8 +1,12 @@
 if(!global.useLobbyServer)
     exit;
 
-var noOfOccupiedSlots;
+var noOfOccupiedSlots, noOfBots;
 noOfOccupiedSlots = getNumberOfOccupiedSlots();
+noOfBots = 0;
+with(Player)
+    if(isBot)
+        noOfBots += 1;
 
 var lobbyBuffer;
 lobbyBuffer = buffer_create();
@@ -15,7 +19,7 @@ write_ubyte(lobbyBuffer, 0); // TCP
 write_ushort(lobbyBuffer, global.hostingPort);
 write_ushort(lobbyBuffer, global.playerLimit);
 write_ushort(lobbyBuffer, noOfOccupiedSlots);
-write_ushort(lobbyBuffer, 0); // Number of bots
+write_ushort(lobbyBuffer, noOfBots);
 if(global.serverPassword != "")
     write_ushort(lobbyBuffer, 1);
 else
