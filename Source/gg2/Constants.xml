@@ -168,8 +168,8 @@
   <constant name="NAV_EDGE_ROCKETJUMP" value="6"/>
   <constant name="NAV_EDGE_STICKYJUMP" value="7"/>
   <constant name="NAV_CACHE_VERSION" value="1"/>
-  <constant name="NAV_BUILD_SCAN_CELLS" value="12000"/>
-  <constant name="NAV_BUILD_CLEAR_CELLS" value="3000"/>
+  <constant name="NAV_BUILD_SCAN_CELLS" value="32000"/>
+  <constant name="NAV_BUILD_CLEAR_CELLS" value="8000"/>
   <constant name="NAV_BUILD_IDLE" value="0"/>
   <constant name="NAV_BUILD_SCAN" value="1"/>
   <constant name="NAV_BUILD_HFREE" value="2"/>

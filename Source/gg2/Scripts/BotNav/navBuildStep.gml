@@ -87,6 +87,10 @@ if(global.navBuildState == NAV_BUILD_FINISH)
     navCacheSave(navCacheKey(), global.navNodes, global.navNodeCount,
                  global.navEdges, global.navEdgeCount, global.navMaskW, global.navMaskH);
 
+    // Wall-clock cost of the cold build, so a server operator can see what a new
+    // map actually cost rather than guessing from the frame counter.
+    global.navBuildMs = current_time - global.navBuildT0;
+
     global.navBuildState = NAV_BUILD_DONE;
     global.navReady = true;
     return true;

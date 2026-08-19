@@ -24,6 +24,8 @@ if(navCacheLoad(key))
     return true;
 }
 global.navFromCache = false;
+global.navBuildT0 = current_time;
+global.navBuildMs = -1;
 
 global.navMaskW = sprite_get_width(global.CustomMapCollisionSprite);
 global.navMaskH = sprite_get_height(global.CustomMapCollisionSprite);
