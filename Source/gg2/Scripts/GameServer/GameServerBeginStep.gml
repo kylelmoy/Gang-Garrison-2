@@ -14,6 +14,12 @@ if(global.run_virtual_ticks)
 if((frame mod 30) == 0 and global.run_virtual_ticks)
     botPopulationUpdate();
 
+// Build the bot nav graph a slice at a time. A cold build is over a second on the
+// largest shipped map, and blocking that long here would stop the socket servicing
+// below and drop every connected client.
+if(global.run_virtual_ticks)
+    navServerTick();
+
 // Service all players
 var i;
 for(i=0; i < ds_list_size(global.players); i+=1)

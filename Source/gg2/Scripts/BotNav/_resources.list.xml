@@ -1,9 +1,18 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <resources>
+  <resource name="navCacheKey" type="RESOURCE"/>
+  <resource name="navToken" type="RESOURCE"/>
+  <resource name="navSolidityScan" type="RESOURCE"/>
+  <resource name="navSolidityBuild" type="RESOURCE"/>
+  <resource name="navClearanceRows" type="RESOURCE"/>
+  <resource name="navClearanceCols" type="RESOURCE"/>
   <resource name="navClearanceBuild" type="RESOURCE"/>
   <resource name="navNodesExtract" type="RESOURCE"/>
   <resource name="navWalkEdges" type="RESOURCE"/>
-  <resource name="navCacheKey" type="RESOURCE"/>
-  <resource name="navSolidityScan" type="RESOURCE"/>
-  <resource name="navSolidityBuild" type="RESOURCE"/>
+  <resource name="navCacheSave" type="RESOURCE"/>
+  <resource name="navCacheLoad" type="RESOURCE"/>
+  <resource name="navGraphFree" type="RESOURCE"/>
+  <resource name="navBuildStart" type="RESOURCE"/>
+  <resource name="navBuildStep" type="RESOURCE"/>
+  <resource name="navServerTick" type="RESOURCE"/>
 </resources>
