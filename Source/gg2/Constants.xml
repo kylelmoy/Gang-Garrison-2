@@ -144,4 +144,27 @@
   <constant name="KEY_RIGHT" value="$20"/>
   <constant name="KEY_LEFT" value="$40"/>
   <constant name="KEY_JUMP" value="$80"/>
+  <constant name="NAV_CELL_SIZE" value="6"/>
+  <constant name="NAV_BOX_W" value="4"/>
+  <constant name="NAV_BOX_H" value="7"/>
+  <constant name="NAV_NODE_FIELDS" value="4"/>
+  <constant name="NAV_NODE_Y" value="0"/>
+  <constant name="NAV_NODE_X0" value="1"/>
+  <constant name="NAV_NODE_X1" value="2"/>
+  <constant name="NAV_NODE_FLAGS" value="3"/>
+  <constant name="NAV_EDGE_FIELDS" value="6"/>
+  <constant name="NAV_EDGE_FROM" value="0"/>
+  <constant name="NAV_EDGE_TO" value="1"/>
+  <constant name="NAV_EDGE_TYPE" value="2"/>
+  <constant name="NAV_EDGE_BUCKET" value="3"/>
+  <constant name="NAV_EDGE_TICKS" value="4"/>
+  <constant name="NAV_EDGE_COST" value="5"/>
+  <constant name="NAV_EDGE_WALK" value="0"/>
+  <constant name="NAV_EDGE_FALL" value="1"/>
+  <constant name="NAV_EDGE_JUMP" value="2"/>
+  <constant name="NAV_EDGE_DROPTHROUGH" value="3"/>
+  <constant name="NAV_EDGE_MOVEBOX" value="4"/>
+  <constant name="NAV_EDGE_DOUBLEJUMP" value="5"/>
+  <constant name="NAV_EDGE_ROCKETJUMP" value="6"/>
+  <constant name="NAV_EDGE_STICKYJUMP" value="7"/>
 </constants>

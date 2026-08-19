@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<resources>
+  <resource name="navClearanceBuild" type="RESOURCE"/>
+  <resource name="navNodesExtract" type="RESOURCE"/>
+  <resource name="navWalkEdges" type="RESOURCE"/>
+  <resource name="navCacheKey" type="RESOURCE"/>
+</resources>

@@ -33,4 +33,5 @@
   <resource name="ggon" type="GROUP"/>
   <resource name="Dominations" type="GROUP"/>
   <resource name="Bots" type="GROUP"/>
+  <resource name="BotNav" type="GROUP"/>
 </resources>
