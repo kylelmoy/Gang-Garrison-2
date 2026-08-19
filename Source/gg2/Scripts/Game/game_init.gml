@@ -5,6 +5,21 @@
     initGear();
     
     instance_create(0,0,RoomChangeObserver);
+    // AudioControl and SSControl used to be created much further down, after
+    // instance_create(0,0,Client) below queues a room change (Client's Create
+    // event calls room_goto_fix, which GM8 defers until this script returns).
+    // Everything instance_create'd later in the same run comes out with none
+    // of its own Create-event variables set - the same quirk that used to
+    // break the agent bridge, fixed there by creating it this early instead.
+    // Left where they were, AudioControl.currentSong stayed permanently
+    // unset, which made every AudioControlPlaySong call (every room's own
+    // creation code calls one) raise a runtime error and abort the rest of
+    // that creation code - which is also how "global.winners = -1" at the end
+    // of basicRoomSetup.gml stopped running, leaving every gamemode HUD that
+    // reads global.winners throwing every single frame for the rest of the
+    // session.
+    instance_create(0, 0, AudioControl);
+    instance_create(0, 0, SSControl);
     set_little_endian_global(true);
     if file_exists("game_errors.log") file_delete("game_errors.log");
     if file_exists("last_plugin.log") file_delete("last_plugin.log");
@@ -338,10 +353,7 @@
     global.dealDamageFunction = ""; // executed after dealDamage, with same args
     
     if(!directory_exists(working_directory + "\Maps")) directory_create(working_directory + "\Maps");
-    
-    instance_create(0, 0, AudioControl);
-    instance_create(0, 0, SSControl);
-    
+
     // custom dialog box graphics
     message_background(popupBackgroundB);
     message_button(popupButtonS);
