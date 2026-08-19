@@ -15,7 +15,7 @@
 ///
 /// The caller owns the returned grid and must ds_grid_destroy it (GM8 has no GC).
 
-var solidGrid, w, h, hfree, freeGrid, cx, cy, count, lastX, lastY;
+var solidGrid, w, h, hfree, freeGrid, cx, cy, count, lastX, lastY, colSum;
 solidGrid = argument0;
 w = argument1;
 h = argument2;
@@ -36,6 +36,15 @@ ds_grid_clear(hfree, 0);
 
 for(cy = 0; cy < h; cy += 1)
 {
+    // Fast path for a row with no terrain in it at all. Real maps are mostly open
+    // air - gg_debug is 96% empty - and one native region write beats w interpreted
+    // ds_grid_get/set pairs by a wide margin.
+    if(ds_grid_get_sum(solidGrid, 0, cy, w - 1, cy) == 0)
+    {
+        ds_grid_set_region(hfree, 0, cy, lastX, cy, 1);
+        continue;
+    }
+
     count = 0;
     for(cx = 0; cx < NAV_BOX_W; cx += 1)
         count += ds_grid_get(solidGrid, cx, cy);
@@ -56,6 +65,18 @@ for(cy = 0; cy < h; cy += 1)
 // Pass 2: the box fits where NAV_BOX_H consecutive rows of hfree are all set.
 for(cx = 0; cx <= lastX; cx += 1)
 {
+    // A column with no horizontal clearance anywhere can never hold the box, and one
+    // that is clear top to bottom always can - both settle in a single native sum
+    // instead of h interpreted reads.
+    colSum = ds_grid_get_sum(hfree, cx, 0, cx, h - 1);
+    if(colSum == 0)
+        continue;
+    if(colSum == h)
+    {
+        ds_grid_set_region(freeGrid, cx, 0, cx, lastY, 1);
+        continue;
+    }
+
     count = 0;
     for(cy = 0; cy < NAV_BOX_H; cy += 1)
         count += ds_grid_get(hfree, cx, cy);

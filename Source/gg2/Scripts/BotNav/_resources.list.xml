@@ -4,4 +4,6 @@
   <resource name="navNodesExtract" type="RESOURCE"/>
   <resource name="navWalkEdges" type="RESOURCE"/>
   <resource name="navCacheKey" type="RESOURCE"/>
+  <resource name="navSolidityScan" type="RESOURCE"/>
+  <resource name="navSolidityBuild" type="RESOURCE"/>
 </resources>
