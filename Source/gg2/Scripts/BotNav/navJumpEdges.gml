@@ -7,10 +7,13 @@
 /// surfaces reachable from spawn.
 ///
 /// The envelope is GG2's own jump, not a guess: baseJumpStrength 8.3 against gravity
-/// 0.6 per tick (F12), giving height above takeoff p(t) = v0*t - g*t*t/2. A candidate
-/// is accepted when the character, travelling horizontally at NAV_JUMP_VX, is still
-/// at or above the landing surface by the time it arrives over it - so the arc is
-/// checked against the real trajectory rather than against a bounding box.
+/// 0.6 per tick (F12), giving height above takeoff p(t) = v0*t - g*t*t/2. How long
+/// that arc lasts, and how fast it is flown, comes from navJumpFlight - which is where
+/// the difference between jumping up onto something and dropping down onto something
+/// lives, and it is not cosmetic. Checking a downward landing the upward way accepts
+/// every surface within horizontal reach and NAV_MAX_FALL rows below regardless of
+/// what is in between, because "arrives over it while at or above it" is true on the
+/// first tick of the arc (F41).
 ///
 /// NAV_JUMP_VX is Heavy's max speed, the slowest class (F12). One graph serves every
 /// class, so every edge in it has to be traversable by the worst of them; a Scout can
@@ -19,9 +22,13 @@
 /// The takeoff speed bucket is recorded on the edge so a per-class relaxation can be
 /// added later without regenerating anything else.
 ///
-/// Clearance is sampled along the arc rather than simulated tick by tick. That is the
-/// deliberate v1 approximation: it catches jumps into ceilings and through walls,
-/// while genuinely exact arcs are the trajectory-fan work (F35).
+/// Clearance is sampled along the arc at one sample per tick, never fewer than
+/// NAV_JUMP_SAMPLES. A tick moves the character at most 4.53px sideways and 8.3px
+/// down, both under two cells, so nothing thin gets tunnelled through; a fixed ten
+/// samples would have put six ticks between them on the long descents this now
+/// simulates. It is still sampling and not a real step-by-step simulation - genuinely
+/// exact arcs are the trajectory-fan work (F35) - but it catches jumps into ceilings,
+/// through walls, and onto surfaces that a nearer one shadows.
 ///
 /// gateGrid may be -1. When it is not, the arc of each edge that survives is sampled
 /// against it and the first gate crossed becomes the edge's gate code. This is the one
@@ -36,8 +43,12 @@
 
 var nodes, nodeCount, freeGrid, nodeGrid, gateGrid, rowStart, w, h, fromNode, toNode;
 var i, j, side, dir, ay, ax0, ax1, by, bx0, bx1, takeoff, xLand;
-var dCells, dWorld, tHit, peak, riseWorld, cost, k, t, sx, sy, blocked, minRow, maxRow, ry, queue, kept;
-var srcGate, arcGate, cellGate;
+var dCells, dWorld, tHit, vx, samples, cost, k, t, sx, sy, blocked, minRow, maxRow, ry, queue, kept;
+var srcGate, arcGate, cellGate, apex, onto, prevSy, sweepY;
+
+// Once past the apex the character is coming down, and the first surface it comes
+// down on is where the jump ends whatever the graph intended.
+apex = NAV_JUMP_V0 / NAV_JUMP_GRAVITY;
 
 nodes = argument0;
 nodeCount = argument1;
@@ -126,29 +137,24 @@ for(i = fromNode; i < toNode; i += 1)
 
                 dCells = abs(xLand - takeoff);
                 dWorld = dCells * NAV_CELL_SIZE;
-                tHit = dWorld / NAV_JUMP_VX;
-                if(tHit > NAV_JUMP_MAX_TICKS)
-                {
-                    j += 1;
-                    continue;
-                }
 
-                // Height above takeoff when the jump arrives over the landing point,
-                // against the height it has to make up. Mask y grows downward, so a
-                // higher surface is a smaller row.
-                peak = NAV_JUMP_V0 * tHit - NAV_JUMP_GRAVITY * tHit * tHit / 2;
-                riseWorld = (ay - by) * NAV_CELL_SIZE;
-                if(peak < riseWorld)
+                // The whole flight, not just the part up to arriving overhead. Mask y
+                // grows downward, so a higher surface is a smaller row.
+                tHit = navJumpFlight(ay, by, dCells);
+                if(tHit < 0)
                 {
                     j += 1;
                     continue;
                 }
+                vx = dWorld / tHit;
 
                 blocked = false;
-                for(k = 1; k <= NAV_JUMP_SAMPLES; k += 1)
+                prevSy = ay;
+                samples = max(NAV_JUMP_SAMPLES, ceil(tHit));
+                for(k = 1; k <= samples; k += 1)
                 {
-                    t = tHit * k / NAV_JUMP_SAMPLES;
-                    sx = round(takeoff + dir * (NAV_JUMP_VX * t) / NAV_CELL_SIZE);
+                    t = tHit * k / samples;
+                    sx = round(takeoff + dir * (vx * t) / NAV_CELL_SIZE);
                     sy = round(ay - (NAV_JUMP_V0 * t - NAV_JUMP_GRAVITY * t * t / 2) / NAV_CELL_SIZE);
 
                     // Off the side of the map, or below its bottom, is a dead end.
@@ -170,7 +176,39 @@ for(i = fromNode; i < toNode; i += 1)
                             blocked = true;
                             break;
                         }
+
+                        // Clearance says the body fits here; it does not say the
+                        // character is still in the air. A cell that is some node's
+                        // anchor has ground directly under it, so on the way down
+                        // that is where this jump ends - and if it is not the surface
+                        // being aimed at, the edge is a fiction. This is what stops a
+                        // hop off a ledge being credited with the floor sixteen rows
+                        // below when there is a walkable ledge one column over (F41).
+                        //
+                        // Swept, not sampled. nodeGrid marks a node's anchor row and
+                        // nothing else, one row out of the mask, while a descending
+                        // arc covers most of a row per tick and rounds to whichever
+                        // is nearest - so a point test walks straight past the row it
+                        // was meant to catch. gg_debug's node 29 -> 44 went from
+                        // +3.2px above its row on one tick to -5.0px below it on the
+                        // next, and the platform in between was never looked at.
+                        if(t > apex and sy > prevSy)
+                        {
+                            for(sweepY = max(0, prevSy + 1); sweepY <= sy; sweepY += 1)
+                            {
+                                onto = ds_grid_get(nodeGrid, sx, sweepY);
+                                if(onto >= 0 and onto != j)
+                                {
+                                    blocked = true;
+                                    break;
+                                }
+                            }
+                            if(blocked)
+                                break;
+                        }
                     }
+
+                    prevSy = sy;
                 }
                 if(blocked)
                 {
@@ -205,22 +243,25 @@ for(i = fromNode; i < toNode; i += 1)
         else
             xLand = max(bx0, takeoff + 1);
         dCells = abs(xLand - takeoff);
-        tHit = (dCells * NAV_CELL_SIZE) / NAV_JUMP_VX;
+        dWorld = dCells * NAV_CELL_SIZE;
+        tHit = navJumpFlight(ay, by, dCells);
+        vx = dWorld / tHit;
         cost = max(1, dCells) + NAV_JUMP_PENALTY;
 
         // Re-walk the arc for gates only now, rather than in the candidate loop: the
         // fan considers every surface in the envelope and keeps three, so sampling
-        // here is a tenth of the work for the same answer.
+        // here is a fraction of the work for the same answer.
         arcGate = NAV_GATE_NONE;
         if(gateGrid >= 0)
         {
-            for(k = 1; k <= NAV_JUMP_SAMPLES; k += 1)
+            samples = max(NAV_JUMP_SAMPLES, ceil(tHit));
+            for(k = 1; k <= samples; k += 1)
             {
                 if(arcGate != NAV_GATE_NONE)
                     break;
 
-                t = tHit * k / NAV_JUMP_SAMPLES;
-                sx = round(takeoff + dir * (NAV_JUMP_VX * t) / NAV_CELL_SIZE);
+                t = tHit * k / samples;
+                sx = round(takeoff + dir * (vx * t) / NAV_CELL_SIZE);
                 sy = round(ay - (NAV_JUMP_V0 * t - NAV_JUMP_GRAVITY * t * t / 2) / NAV_CELL_SIZE);
                 if(sx < 0 or sx > w - NAV_BOX_W or sy < 0 or sy > h - NAV_BOX_H)
                     continue;
@@ -233,7 +274,10 @@ for(i = fromNode; i < toNode; i += 1)
         if(arcGate == NAV_GATE_NONE)
             arcGate = ds_grid_get(nodes, NAV_NODE_GATE, j);
 
-        navEdgeAdd(i, j, NAV_EDGE_JUMP, round(NAV_JUMP_VX), round(tHit), cost, arcGate);
+        // The bucket is the horizontal speed this arc actually needs, which is
+        // NAV_JUMP_VX for a jump up or across and slower for a drop. A per-class
+        // relaxation later wants the requirement, not the cap.
+        navEdgeAdd(i, j, NAV_EDGE_JUMP, round(vx), round(tHit), cost, arcGate);
         kept += 1;
     }
     ds_priority_destroy(queue);

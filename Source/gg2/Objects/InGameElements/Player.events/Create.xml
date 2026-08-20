@@ -54,6 +54,7 @@
     botReplans = 0;
     botStuckFires = 0;
     botBlacklistFires = 0;
+    botOffRouteFires = 0;
     
     // client setting stuff; set to defaults
     queueJump = false;

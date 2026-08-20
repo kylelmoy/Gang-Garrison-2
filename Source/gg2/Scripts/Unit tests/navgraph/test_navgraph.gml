@@ -20,6 +20,7 @@ test_unit_begin();
 var solidGrid, freeGrid, platformGrid, lethalGrid, doorGrid, gateGrid, nodeGrid, nodes, edges, w, h;
 var oldMap, oldMd5, oldArea, oldSetup, gateInst, gl, gt, gr, gb;
 var path, oldNodes, oldEdges, oldCount, oldEdgeCount, oldReady, testIdx, oldIdx;
+var ei, hasUpperToBlock, hasUpperToFloor;
 
 // This suite may run against a server with a live nav graph. navNodesExtract and
 // navEdgesBuild both report their results through globals, so every case below
@@ -217,6 +218,121 @@ edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
 
 test_assert_equals(2, global.navNodeCount);
 test_assert_equals(0, global.navEdgeCount);
+
+ds_grid_destroy(edges);
+ds_grid_destroy(nodes);
+ds_grid_destroy(freeGrid);
+ds_grid_destroy(solidGrid);
+
+// ---------------------------------------------------------------------------
+// How long a jump lasts, which is not the same question going up as going down.
+//
+// navJumpFlight is the whole of F41 in one script. Landing level or above, the jump
+// ends when the character first arrives over the target, so the horizontal distance
+// sets the time. Landing below, arriving overhead proves nothing - it happens on the
+// first tick, tens of pixels up - and the jump ends when the arc falls back to the
+// landing row instead, which is many times longer.
+// ---------------------------------------------------------------------------
+
+// Level, ten cells: 60 world px at Heavy's 4.53 px/tick.
+test_assert_equals(13, round(navJumpFlight(10, 10, 10)));
+
+// Up 30px over five cells. The arc is 41.8px high on arrival, so it clears.
+test_assert_equals(7, round(navJumpFlight(20, 15, 5)));
+
+// Up 72px one cell away. GG2's jump peaks at 57px, so no speed makes this.
+test_assert_equals(-1, navJumpFlight(20, 8, 1));
+
+// The gg_debug case: sixteen rows down, three cells across. The old model called
+// this a four-tick hop because the character is "over" the target immediately; it
+// is really a thirty-six tick fall, and the difference is every surface in between.
+test_assert_equals(36, round(navJumpFlight(29, 45, 3)));
+
+// One row down but forty cells across - only 128px of travel before landing.
+test_assert_equals(-1, navJumpFlight(0, 1, 40));
+
+// Level and beyond NAV_JUMP_MAX_TICKS.
+test_assert_equals(-1, navJumpFlight(10, 10, 50));
+
+// ---------------------------------------------------------------------------
+// A surface far below is not reachable just because it is under the takeoff.
+//
+// This is F41 as geometry. An upper ledge, a block partway down and to the left, and
+// a floor at the bottom. Stepping left off the ledge lands on the block, so the ledge
+// connects to the block and to nothing below it - but the old generator stopped
+// simulating the arc the moment it was horizontally over its target, which for the
+// floor was the first tick, and so credited the ledge with a jump straight down
+// through the block.
+//
+// Ledge top at row 10 (anchor row 3), block top at row 18 (anchor row 11), floor top
+// at row 34 (anchor row 27). The ledge runs to the right edge of the map on purpose:
+// its left end has to be its only way off, or stepping off the right end really does
+// drop to the floor and the case proves nothing.
+//
+// Note the anchor spans that come back are wider than the terrain that makes them - a
+// run of solid from column 20 gives anchors from 17, because an anchor is the left
+// edge of a 4-cell box and only needs some of it supported (navAnchorCol). Reading
+// those off the extractor rather than assuming them is what this case is asserting.
+// ---------------------------------------------------------------------------
+w = 60;
+h = 44;
+solidGrid = ds_grid_create(w, h);
+ds_grid_clear(solidGrid, 0);
+ds_grid_set_region(solidGrid, 20, 10, w - 1, 11, 1);
+ds_grid_set_region(solidGrid, 8, 18, 19, 19, 1);
+ds_grid_set_region(solidGrid, 0, 34, w - 1, h - 1, 1);
+
+freeGrid = navClearanceBuild(solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
+
+// Sorted by row, so 0 is the ledge, 1 the block, 2 the floor.
+test_assert_equals(3, global.navNodeCount);
+test_assert_equals(3, ds_grid_get(nodes, NAV_NODE_Y, 0));
+test_assert_equals(11, ds_grid_get(nodes, NAV_NODE_Y, 1));
+test_assert_equals(27, ds_grid_get(nodes, NAV_NODE_Y, 2));
+test_assert_equals(17, ds_grid_get(nodes, NAV_NODE_X0, 0));
+test_assert_equals(w - NAV_BOX_W, ds_grid_get(nodes, NAV_NODE_X1, 0));
+test_assert_equals(16, ds_grid_get(nodes, NAV_NODE_X1, 1));
+
+hasUpperToBlock = false;
+hasUpperToFloor = false;
+for(ei = 0; ei < global.navEdgeCount; ei += 1)
+{
+    if(ds_grid_get(edges, NAV_EDGE_FROM, ei) == 0)
+    {
+        if(ds_grid_get(edges, NAV_EDGE_TO, ei) == 1)
+            hasUpperToBlock = true;
+        if(ds_grid_get(edges, NAV_EDGE_TO, ei) == 2)
+            hasUpperToFloor = true;
+    }
+}
+
+// The reachable one survives...
+test_assert_equals(true, hasUpperToBlock);
+// ...and the one that would fly through the block does not.
+test_assert_equals(false, hasUpperToFloor);
+
+// The bot still gets to the bottom, one surface at a time, which is why removing the
+// shortcut costs no reachability. navFindPath reads the graph off globals, so this
+// stands them up and puts them back the way the A* case below does.
+global.navNodes = nodes;
+global.navEdges = edges;
+testIdx = navEdgeIndex(edges, global.navEdgeCount, global.navNodeCount);
+oldIdx = -1;
+if(variable_global_exists("navEdgeIdx"))
+    oldIdx = global.navEdgeIdx;
+global.navEdgeIdx = testIdx;
+global.navReady = true;
+
+path = navFindPath(0, 2, TEAM_RED, false, -1);
+test_assert_equals(true, path >= 0);
+test_assert_equals(3, ds_list_size(path));
+ds_list_destroy(path);
+
+global.navReady = false;
+global.navEdgeIdx = oldIdx;
+ds_grid_destroy(testIdx);
 
 ds_grid_destroy(edges);
 ds_grid_destroy(nodes);

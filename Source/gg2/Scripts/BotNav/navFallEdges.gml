@@ -58,6 +58,16 @@ for(i = fromNode; i < toNode; i += 1)
         if(ds_grid_get(freeGrid, xEdge, cy) != 1)
             continue;
 
+        // And there has to be nothing to stand on there, or it is not a ledge at all.
+        // A run ends wherever clearance or ground ends, so the very next column along
+        // is often another node at the same height - a platform butted against
+        // terrain, or the far side of a gate cut. Sweeping down from cy + 1 walks
+        // straight past it and credits the surface far below with a fall the
+        // character would never take, when all it does is step across. navWalkEdges
+        // already links these.
+        if(ds_grid_get(nodeGrid, xEdge, cy) >= 0)
+            continue;
+
         landed = -1;
         dropped = 0;
         arcGate = NAV_GATE_NONE;

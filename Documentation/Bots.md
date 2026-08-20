@@ -1,7 +1,7 @@
 # NPC Bots
 
 Design notes for server-side AI players ("bots"). This is a condensed copy of the working
-research/design record; see the project's planning notes for full findings (F1-F35) if you need
+research/design record; see the project's planning notes for full findings (F1-F41) if you need
 the "why" behind something here.
 
 ## The core idea
@@ -39,9 +39,12 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
    `processClientCommands(player, i)` — the same point a human's `INPUTSTATE` is consumed, so
    ordering matches a human's by construction.
 4. **Navigation** — built once per map load, server-only, from the walkmask
-   (`global.CustomMapCollisionSprite`). A trajectory-fan nav graph (Pignole-style), simulated with
-   the game's own physics update so it's exact by construction, chunked across frames so it never
-   blocks socket servicing, and cached to disk keyed by map MD5.
+   (`global.CustomMapCollisionSprite`), chunked across frames so it never blocks socket servicing
+   and cached to disk keyed by map MD5. Nodes are run-length-encoded standable surfaces; edges are
+   analytic rather than a full trajectory fan, each generator using GG2's own movement numbers —
+   walks and one-cell steps, straight-down falls, drop-throughs, jump arcs against the real
+   `v0`/gravity envelope, and movebox pushes. The fan of F35 remains the endpoint; what is built is
+   its cheap first pass, and every edge it emits has to be one a bot can actually execute.
 5. **Combat/behaviour** — target selection modelled on `SentryTurret`'s End Step (a `ds_priority`
    over nearby `Character`s, LOS via `collision_line_bulletblocking`), plus per-class firing policy
    and a difficulty model (aim error, reaction latency, decision cadence).
@@ -62,6 +65,14 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
 - **A whole-map nav build is seconds of blocking work** — fine in the map editor, not fine as a
   blocking loop on a live server. Chunk it across frames from an alarm, and cache the built graph
   to disk keyed by map MD5 so the expensive path runs once per map ever.
+- **A jump arc has to be simulated all the way to where the character lands, not to where it is
+  first horizontally over its target.** Those are the same moment when jumping up onto a ledge and
+  wildly different when dropping down onto a floor, where "over it, and above it" is true on the
+  first tick of the jump. Stopping there credits a ledge with every surface below it regardless of
+  what is in between, and because those edges look cheap they crowd the real ones out of the
+  per-side keep limit. `navJumpFlight` is where the two cases are separated; the descending half of
+  the arc must also be checked against the node grid, *swept* over the rows it crosses rather than
+  point-sampled, because a node occupies one row of the mask and a falling arc rounds past it.
 - **Almost nothing in GG2 is hitscan.** Only the Sniper Rifle is true hitscan; every other weapon
   (including Scattergun, Shotgun, Minigun, Revolver) drops with per-tick gravity. A bot's aim
   solver needs drop compensation on all of them, not just the obviously-lobbed Minegun.
@@ -87,6 +98,24 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
   `collision_line_bulletblocking`), aim and hold fire at it, and re-decide only every 15 ticks
   (staggered per bot) rather than tracking continuously. Confirmed via genuine bot-vs-bot combat
   (real kills, real respawns) and a direct `event_user(1)`/`pressedKeys` edge-detection check.
-- **M4 onward** (navigation, path following, objectives/per-class/difficulty) are tracked in the
-  project's working notes, not yet implemented. Bots currently do not move — they stand at spawn
-  and fight whatever comes into range.
+- **M4** — nav graph builder: implemented (`Scripts/BotNav/`) and verified. The walkmask is scanned
+  into a solidity grid, dilated by the character box into a clearance grid, and run-length encoded
+  into surface nodes; edges come from five generators (walk, fall, drop-through, jump, movebox)
+  plus one-way doors, and A\* (`navFindPath`) searches them against a prebuilt adjacency index. The
+  build is chunked across frames so it never blocks socket servicing, and cached to disk keyed by
+  map name, area and MD5. Map objects the walkmask does not contain — `PlayerWall`,
+  `DropdownPlatform`, `KillBox`/`PitFall`/`FragBox`, `LeftDoor`/`RightDoor`, the gates, the
+  moveboxes — are stamped in separately by `navMarkInstances`. `cp_dirtbowl` (560k cells) builds in
+  ~11.7s cold with a client connected, both ends holding 30 fps, and loads from cache instantly
+  after.
+- **M5** — path following: implemented (`Scripts/Bots/botSetGoal.gml`, `botPathPlan.gml`,
+  `botPathKeys.gml`) and verified. `botSetGoal(player, wx, wy)` is the entire interface — deciding
+  *where* is M6's job. Gate passability is decided per query from the asking bot's team and intel
+  carriage rather than baked into the graph, since a gate is not a wall to everyone. The follower
+  re-plans on a slow timer, on being stuck, and immediately on finishing a move somewhere the route
+  does not go, and blacklists the edge that misled it. Verified on `gg_debug`: a bot walks from
+  spawn to a named point through a drop-through platform, back uphill over jump edges, and through
+  its own team gate, arriving within a few pixels each time.
+- **M6** (objectives per game mode, per-class policies, difficulty tiers) is tracked in the
+  project's working notes, not yet implemented. Bots navigate on command but choose no destination
+  of their own yet.

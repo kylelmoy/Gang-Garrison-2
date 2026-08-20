@@ -87,13 +87,38 @@ if(here >= 0)
     }
 }
 
-// Only count off-route time while standing on something. Mid-jump there is no node
-// under the bot at all, and a 28-tick arc would otherwise read as a 28-tick
-// interruption every single time (F24).
+// Standing on a surface the route does not mention is not a delay to ride out, it is a
+// finished move that went somewhere else, and waiting BOT_OFFPATH_TICKS to admit it is
+// how a bot walks somewhere it cannot get back from. So that case re-plans at once,
+// from wherever it actually is.
+//
+// Not knowing where we are at all is the different case, and it does get the timer:
+// mid-jump there is no node under the bot, and a 28-tick arc would otherwise read as a
+// 28-tick interruption every single time (F24). char.onground is what tells the two
+// apart, and navNodeFromWorld resolving to a node while airborne is not to be trusted -
+// it deliberately tolerates being a couple of cells off a surface.
 if(found)
     player.botOffPathTicks = 0;
 else if(char.onground)
+{
+    if(here >= 0)
+    {
+        // The edge in progress is the one that just deposited the bot somewhere the
+        // route does not go, so take it away for a few seconds the same way the stuck
+        // detector does. Without this, A* hands back the identical route from the
+        // node the bot drifted onto, it walks back, and the pair of surfaces becomes a
+        // loop the bot never leaves - and unlike the wedged case the anti-thrash
+        // distance check never fires, because the bot is genuinely covering ground.
+        // botPathFree has already zeroed botEdgeFrom/To if there was no edge running,
+        // and botBlacklistEdge ignores negative nodes.
+        player.botOffRouteFires += 1;
+        player.botOffPathTicks = 0;
+        botBlacklistEdge(player, player.botEdgeFrom, player.botEdgeTo);
+        botPathPlan(player);
+        return 0;
+    }
     player.botOffPathTicks += 1;
+}
 
 if(player.botOffPathTicks > BOT_OFFPATH_TICKS)
 {
@@ -114,12 +139,36 @@ if(player.botPathAt >= size - 1)
     c1 = ds_grid_get(global.navNodes, NAV_NODE_X1, cur);
     gx = max(navColWorldX(c0), min(navColWorldX(c1), player.botGoalX));
 
+    // Being within tolerance of the goal is not the same as stopping there. A bot
+    // arrives at a run - often still falling onto the last surface - and GG2 keeps a
+    // character's horizontal speed for about ten ticks after the keys come off, so
+    // declaring arrival on position alone and then pressing nothing coasts the bot
+    // thirty to forty pixels past the thing it was sent to. Measured on all three legs
+    // of the gg_debug walk; the last one slid into the left wall.
+    //
+    // So inside the tolerance band the bot brakes rather than coasts, and only counts
+    // as arrived once it is on the ground and actually stopped. Braking is a press
+    // against the motion, which is also how a player stops; the speed floor is what
+    // keeps that from becoming a press back the other way.
     if(abs(char.x - gx) <= BOT_ARRIVE_TOL)
     {
-        player.botArrived = true;
-        player.botHasGoal = false;
-        botPathFree(player);
-        return 0;
+        if(char.onground and abs(char.hspeed) < 1)
+        {
+            player.botArrived = true;
+            player.botHasGoal = false;
+            botPathFree(player);
+            return 0;
+        }
+
+        if(char.hspeed > 1)
+            keys = KEY_LEFT;
+        else if(char.hspeed < -1)
+            keys = KEY_RIGHT;
+
+        // Not stuck: standing still inside the band with nothing to brake is the
+        // whole point, and the airborne case is waiting on a landing, not wedged.
+        player.botStuckTicks = 0;
+        return keys;
     }
 
     if(char.x < gx)
