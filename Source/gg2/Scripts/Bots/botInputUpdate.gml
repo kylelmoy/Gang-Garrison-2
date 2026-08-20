@@ -17,6 +17,10 @@
 /// detection keeps working in between decisions (F3). The path follower depends on it:
 /// Character jumps on the rising edge of $80, not on the bit being held.
 ///
+/// Where to aim, once a target is picked, is botAimSolve's job: almost every GG2
+/// projectile falls, so a straight point_direction at the target shoots high at range
+/// on nearly every weapon in the game.
+///
 /// A third, coarser cadence decides *where* to walk: botObjectiveUpdate (M6) reads the
 /// game mode's objective and calls botSetGoal when it changes. Run it before
 /// botPathKeys so a freshly issued goal is already what this tick's movement plans
@@ -48,7 +52,7 @@ with(char)
 
         if(target != noone)
         {
-            aimDirection = point_direction(x, y, target.x, target.y);
+            aimDirection = botAimSolve(id, target);
             netAimDirection = aimDirection*65536/360;
             player.botAttackKeys = KEY_ATTACK;
         }

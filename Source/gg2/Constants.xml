@@ -213,4 +213,6 @@
   <constant name="BOT_JUMP_LEAD" value="1"/>
   <constant name="BOT_OBJECTIVE_PERIOD" value="30"/>
   <constant name="BOT_GOAL_RETARGET_DIST" value="48"/>
+  <constant name="BOT_AIM_ITERATIONS" value="8"/>
+  <constant name="BOT_AIM_MAX_TICKS" value="60"/>
 </constants>
