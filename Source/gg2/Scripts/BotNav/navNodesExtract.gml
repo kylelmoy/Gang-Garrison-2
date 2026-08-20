@@ -1,10 +1,10 @@
-/// navNodesExtract(freeGrid, solidGrid, platformGrid, lethalGrid, w, h)
+/// navNodesExtract(freeGrid, solidGrid, platformGrid, lethalGrid, doorGrid, w, h)
 /// Run-length encodes the clearance grid into floor surfaces: one node per maximal
 /// horizontal run of cells a character can stand on. Returns a ds_grid of
 /// NAV_NODE_FIELDS columns by (number of nodes) rows, and sets global.navNodeCount.
 ///
-/// platformGrid and lethalGrid may be -1 when a caller has neither - the unit tests
-/// build bare terrain and pass -1 for both.
+/// platformGrid, lethalGrid and doorGrid may be -1 when a caller has none of them -
+/// the unit tests build bare terrain and pass -1 for whichever it does not need.
 ///
 /// Read the count from global.navNodeCount, not ds_grid_height - a graph with no
 /// nodes still returns a one-row grid, because a zero-height ds_grid is not worth
@@ -26,16 +26,25 @@
 /// hp = 0 on contact, so a node there is not somewhere a bot may stand; it is a place
 /// the graph must never offer.
 ///
+/// A run is also cut at every column where doorGrid changes, the same treatment as a
+/// platform/terrain kind change: a LeftDoor or RightDoor cell does not stop a
+/// character from standing there, but it does gate which direction of travel is
+/// allowed across it, and that can only be expressed as a boundary between two nodes.
+/// The isolated door node this produces is usually a cell or two wide - the door's own
+/// footprint - and NAV_NODE_DOOR records which way it blocks. navWalkEdges reads it
+/// back when linking same-row neighbours.
+///
 /// Nodes come out sorted by y then x, which navWalkEdges relies on to index rows.
 
-var freeGrid, solidGrid, platformGrid, lethalGrid, w, h;
-var nodes, capacity, count, cx, cy, runStart, support, psupport, lethal, lastX, lastY, belowY, platformOnly, standable;
+var freeGrid, solidGrid, platformGrid, lethalGrid, doorGrid, w, h;
+var nodes, capacity, count, cx, cy, runStart, support, psupport, lethal, lastX, lastY, belowY, platformOnly, standable, doorCode, sameDoor;
 freeGrid = argument0;
 solidGrid = argument1;
 platformGrid = argument2;
 lethalGrid = argument3;
-w = argument4;
-h = argument5;
+doorGrid = argument4;
+w = argument5;
+h = argument6;
 
 capacity = 64;
 nodes = ds_grid_create(NAV_NODE_FIELDS, capacity);
@@ -79,13 +88,26 @@ for(cy = 0; cy <= lastY; cy += 1)
         {
             runStart = cx;
             platformOnly = (support == 0 and psupport > 0);
+            doorCode = NAV_DOOR_NONE;
+            if(doorGrid >= 0)
+                doorCode = ds_grid_get(doorGrid, cx, cy);
+            sameDoor = true;
 
             // The run is also cut where the kind of support changes. A stretch that is
             // half ground and half platform is one continuous walkable surface, but
             // only the platform half can be dropped through - so keeping them in one
             // node would either invent a drop-through over solid ground or lose the
-            // real one. Splitting them keeps every edge honest.
-            while(cx <= lastX and standable and ((support == 0 and psupport > 0) == platformOnly))
+            // real one. Splitting them keeps every edge honest. A door cell gets the
+            // same treatment: it is tested at cy (body height), not belowY, because
+            // what a door gates is passage, not support.
+            //
+            // sameDoor is computed with an explicit if rather than folded into this
+            // condition as "doorGrid < 0 or ds_grid_get(doorGrid, cx, cy) == doorCode"
+            // - GM8's "and"/"or" evaluate both sides unconditionally, unlike most
+            // languages, so that inline form calls ds_grid_get on doorGrid even when
+            // it is -1 and throws "Data structure with index does not exist" on every
+            // caller that has no door grid to pass.
+            while(cx <= lastX and standable and ((support == 0 and psupport > 0) == platformOnly) and sameDoor)
             {
                 if(cx + NAV_BOX_W < w)
                 {
@@ -104,6 +126,9 @@ for(cy = 0; cy <= lastY; cy += 1)
                 }
                 cx += 1;
                 standable = (cx <= lastX) and (lethal == 0) and (support > 0 or psupport > 0) and ds_grid_get(freeGrid, cx, cy) == 1;
+                sameDoor = true;
+                if(doorGrid >= 0 and cx <= lastX)
+                    sameDoor = (ds_grid_get(doorGrid, cx, cy) == doorCode);
             }
 
             if(count >= capacity)
@@ -116,6 +141,7 @@ for(cy = 0; cy <= lastY; cy += 1)
             ds_grid_set(nodes, NAV_NODE_X0, count, runStart);
             ds_grid_set(nodes, NAV_NODE_X1, count, cx - 1);
             ds_grid_set(nodes, NAV_NODE_FLAGS, count, platformOnly);
+            ds_grid_set(nodes, NAV_NODE_DOOR, count, doorCode);
             count += 1;
         }
         else

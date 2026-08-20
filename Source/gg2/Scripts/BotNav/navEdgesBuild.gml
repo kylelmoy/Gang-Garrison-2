@@ -33,6 +33,8 @@ if(nodeCount > 0)
     navJumpEdges(nodes, nodeCount, freeGrid, nodeGrid, rowStart, w, h, 0, nodeCount);
     ds_grid_destroy(rowStart);
 
+    navMoveBoxEdges(freeGrid, nodeGrid, w, h);
+
     ds_grid_destroy(nodeGrid);
 }
 

@@ -75,7 +75,7 @@ if(global.navBuildState == NAV_BUILD_FREE)
 // chunking exists to avoid, so fall and jump run a slice of nodes at a time.
 if(global.navBuildState == NAV_BUILD_NODES)
 {
-    global.navNodes = navNodesExtract(global.navFree, global.navSolid, global.navPlatform, global.navLethal, global.navMaskW, global.navMaskH);
+    global.navNodes = navNodesExtract(global.navFree, global.navSolid, global.navPlatform, global.navLethal, global.navDoor, global.navMaskW, global.navMaskH);
     global.navCellGrid = navNodeGrid(global.navNodes, global.navNodeCount, global.navMaskW, global.navMaskH);
     global.navRowStart = navRowIndex(global.navNodes, global.navNodeCount, global.navMaskH);
 
@@ -120,8 +120,17 @@ if(global.navBuildState == NAV_BUILD_JUMP)
     if(global.navCursor >= global.navNodeCount)
     {
         global.navCursor = 0;
-        global.navBuildState = NAV_BUILD_FINISH;
+        global.navBuildState = NAV_BUILD_MOVEBOX;
     }
+    return false;
+}
+
+// A handful of instances at most, against hundreds of nodes either side of it, so
+// this runs to completion in one tick rather than taking a cursor.
+if(global.navBuildState == NAV_BUILD_MOVEBOX)
+{
+    navMoveBoxEdges(global.navFree, global.navCellGrid, global.navMaskW, global.navMaskH);
+    global.navBuildState = NAV_BUILD_FINISH;
     return false;
 }
 
@@ -150,6 +159,8 @@ if(global.navBuildState == NAV_BUILD_FINISH)
     global.navPlatform = -1;
     ds_grid_destroy(global.navLethal);
     global.navLethal = -1;
+    ds_grid_destroy(global.navDoor);
+    global.navDoor = -1;
 
     navCacheSave(navCacheKey(), global.navNodes, global.navNodeCount,
                  global.navEdges, global.navEdgeCount, global.navMaskW, global.navMaskH);

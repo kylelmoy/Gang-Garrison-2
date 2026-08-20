@@ -1,10 +1,11 @@
-/// navMarkInstances(solidGrid, platformGrid, lethalGrid, w, h)
+/// navMarkInstances(solidGrid, platformGrid, lethalGrid, doorGrid, w, h)
 /// Stamps the map objects that are not part of the walkmask into the nav grids.
 ///
-/// The walkmask is only the terrain. PlayerWalls, drop-through platforms and the
-/// lethal volumes are ordinary instances, so a graph built from the walkmask alone
-/// routes bots straight through player walls, treats every platform as thin air, and
-/// happily paths across a killbox.
+/// The walkmask is only the terrain. PlayerWalls, drop-through platforms, the lethal
+/// volumes and the one-way doors are ordinary instances, so a graph built from the
+/// walkmask alone routes bots straight through player walls, treats every platform as
+/// thin air, happily paths across a killbox, and walks LeftDoor/RightDoor as freely
+/// passable in both directions when really only one way is open.
 ///
 ///   solidGrid     gains PlayerWall (and PlayerWallHorizontal, its child) - static,
 ///                 always blocking, so it belongs in the terrain grid.
@@ -13,6 +14,13 @@
 ///                 jumps up through one freely, so treating it as terrain would wall
 ///                 off everything underneath.
 ///   lethalGrid    gains KillBox, PitFall and FragBox, which set hp = 0 on contact.
+///   doorGrid      gains LeftDoor (NAV_DOOR_LEFT) and RightDoor (NAV_DOOR_RIGHT).
+///                 Unlike the others this is not a solidity fact - a door blocks only
+///                 one direction of horizontal travel through it
+///                 (Character.events/Collision with LeftDoor.xml checks hspeed's
+///                 sign) - so navNodesExtract uses it to cut a node boundary rather
+///                 than to remove standability, and navWalkEdges reads it back to
+///                 suppress the disallowed direction across that boundary.
 ///
 /// Gates are deliberately absent. TeamGate, IntelGate and ControlPointSetupGate are
 /// per-frame conditional solids - your own team's gate is passable, an IntelGate only
@@ -26,12 +34,13 @@
 /// built. A moving platform therefore reads as a static ledge at one end of its
 /// travel. Correct handling needs a time-varying edge, which nothing here models yet.
 
-var solidGrid, platformGrid, lethalGrid, w, h;
+var solidGrid, platformGrid, lethalGrid, doorGrid, w, h;
 solidGrid = argument0;
 platformGrid = argument1;
 lethalGrid = argument2;
-w = argument3;
-h = argument4;
+doorGrid = argument3;
+w = argument4;
+h = argument5;
 
 with(PlayerWall)
 {
@@ -90,5 +99,29 @@ with(FragBox)
             max(0, floor(bbox_top / NAV_CELL_SIZE)),
             min(w - 1, floor(bbox_right / NAV_CELL_SIZE)),
             min(h - 1, floor(bbox_bottom / NAV_CELL_SIZE)), 1);
+    }
+}
+
+with(LeftDoor)
+{
+    if(doorGrid >= 0)
+    {
+        ds_grid_set_region(doorGrid,
+            max(0, floor(bbox_left / NAV_CELL_SIZE)),
+            max(0, floor(bbox_top / NAV_CELL_SIZE)),
+            min(w - 1, floor(bbox_right / NAV_CELL_SIZE)),
+            min(h - 1, floor(bbox_bottom / NAV_CELL_SIZE)), NAV_DOOR_LEFT);
+    }
+}
+
+with(RightDoor)
+{
+    if(doorGrid >= 0)
+    {
+        ds_grid_set_region(doorGrid,
+            max(0, floor(bbox_left / NAV_CELL_SIZE)),
+            max(0, floor(bbox_top / NAV_CELL_SIZE)),
+            min(w - 1, floor(bbox_right / NAV_CELL_SIZE)),
+            min(h - 1, floor(bbox_bottom / NAV_CELL_SIZE)), NAV_DOOR_RIGHT);
     }
 }
