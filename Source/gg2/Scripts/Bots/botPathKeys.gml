@@ -30,6 +30,7 @@
 
 var player, char, keys, here, size, cur, nxt, i, edgeRow, edgeType, found, moved;
 var mx, targetCol, tx, gx, n0, n1, c0, c1, takeoffCol, wantJump, dirToNext;
+var needVx, jumpEdge, braking;
 
 player = argument0;
 char = player.object;
@@ -232,6 +233,9 @@ else
 }
 
 wantJump = false;
+jumpEdge = false;
+braking = false;
+needVx = 0;
 
 if(edgeType == NAV_EDGE_DROPTHROUGH)
 {
@@ -267,10 +271,35 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
             takeoffCol = c0;
     }
 
+    // A jump edge is flown at the speed the build simulated it at, not at a sprint.
+    // navJumpFlight returns a horizontal speed rather than assuming NAV_JUMP_VX, and
+    // for a steep climb - the ordinary "hop onto a crate" - that speed is 1 to 3 px per
+    // tick, because the character has to spend most of the arc going up rather than
+    // across. A Scout holding a direction key reaches nearly ten. Fly one of those arcs
+    // at a run and the bot sails over the landing and comes down somewhere the route
+    // does not mention, which is an off-route interruption and a blacklisted edge every
+    // single time - measured on koth_valley at 34 of each in about two minutes.
+    //
+    // NAV_EDGE_BUCKET is that required speed, recorded by the generator for exactly
+    // this. The floor of 1 is because it is stored rounded and a slow enough arc rounds
+    // to zero, which would mean never pressing anything and never arriving.
+    jumpEdge = true;
+    needVx = max(1, ds_grid_get(global.navEdges, NAV_EDGE_BUCKET, edgeRow));
+
     if(char.onground)
     {
         if(abs(mx - takeoffCol) <= BOT_JUMP_LEAD)
-            wantJump = true;
+        {
+            // Leaving the ground already faster than the arc allows cannot be corrected
+            // in the air: with no key held GG2 bleeds horizontal speed by about 13% a
+            // tick, so a bot arriving at 9 is still over 3 some eight ticks later, which
+            // is most of the flight. So brake on the takeoff column until the speed is
+            // one the arc was actually simulated at, then go.
+            if(abs(char.hspeed) <= needVx)
+                wantJump = true;
+            else
+                braking = true;
+        }
         else
             targetCol = takeoffCol;
     }
@@ -292,6 +321,22 @@ else if(dirToNext > 0)
     keys |= KEY_RIGHT;
 else if(dirToNext < 0)
     keys |= KEY_LEFT;
+
+// Hold the flown speed to what the edge asked for. Braking is a press against the
+// motion, the same way the arrival branch stops a bot rather than letting it coast; in
+// the air it is enough to stop pressing, since the bot only ever accelerates while a
+// direction is held. Both replace the steering keys rather than adding to them, so the
+// bot cannot brake and steer in the same tick.
+if(braking)
+{
+    keys = keys & ~(KEY_LEFT | KEY_RIGHT);
+    if(char.hspeed > 0)
+        keys |= KEY_LEFT;
+    else if(char.hspeed < 0)
+        keys |= KEY_RIGHT;
+}
+else if(jumpEdge and !char.onground and abs(char.hspeed) >= needVx)
+    keys = keys & ~(KEY_LEFT | KEY_RIGHT);
 
 if(wantJump)
 {
