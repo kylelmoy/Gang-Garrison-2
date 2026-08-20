@@ -17,8 +17,8 @@
 
 test_unit_begin();
 
-var solidGrid, freeGrid, platformGrid, lethalGrid, doorGrid, nodeGrid, nodes, edges, w, h;
-var oldMap, oldMd5, oldArea;
+var solidGrid, freeGrid, platformGrid, lethalGrid, doorGrid, gateGrid, nodeGrid, nodes, edges, w, h;
+var oldMap, oldMd5, oldArea, oldSetup, gateInst, gl, gt, gr, gb;
 var path, oldNodes, oldEdges, oldCount, oldEdgeCount, oldReady, testIdx, oldIdx;
 
 // This suite may run against a server with a live nav graph. navNodesExtract and
@@ -55,7 +55,7 @@ ds_grid_clear(solidGrid, 0);
 ds_grid_set_region(solidGrid, 0, 15, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
 
 test_assert_equals(1, global.navNodeCount);
 test_assert_equals(8, ds_grid_get(nodes, NAV_NODE_Y, 0));
@@ -63,7 +63,7 @@ test_assert_equals(0, ds_grid_get(nodes, NAV_NODE_X0, 0));
 test_assert_equals(w - NAV_BOX_W, ds_grid_get(nodes, NAV_NODE_X1, 0));
 
 // A lone surface has nothing to connect to, and both its ends run off the map.
-edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
 test_assert_equals(0, global.navEdgeCount);
 
 ds_grid_destroy(edges);
@@ -85,7 +85,7 @@ ds_grid_set_region(solidGrid, 0, 15, w - 1, h - 1, 1);
 ds_grid_set_region(solidGrid, 0, 0, w - 1, 10, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
 
 test_assert_equals(0, global.navNodeCount);
 
@@ -109,8 +109,8 @@ ds_grid_set_region(solidGrid, 0, 16, 14, h - 1, 1);
 ds_grid_set_region(solidGrid, 15, 15, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, w, h);
-edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
 
 test_assert_equals(2, global.navNodeCount);
 test_assert_equals(8, ds_grid_get(nodes, NAV_NODE_Y, 0));
@@ -139,8 +139,8 @@ ds_grid_set_region(solidGrid, 0, 16, 14, h - 1, 1);
 ds_grid_set_region(solidGrid, 15, 14, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, w, h);
-edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
 
 test_assert_equals(2, global.navNodeCount);
 
@@ -163,7 +163,7 @@ solidGrid = ds_grid_create(w, h);
 ds_grid_clear(solidGrid, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
 
 test_assert_equals(0, global.navNodeCount);
 
@@ -189,8 +189,8 @@ ds_grid_set_region(solidGrid, 0, 16, 14, h - 1, 1);
 ds_grid_set_region(solidGrid, 30, 16, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, w, h);
-edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
 
 test_assert_equals(2, global.navNodeCount);
 test_assert_equals(0, navCountEdgeType(edges, global.navEdgeCount, NAV_EDGE_WALK));
@@ -212,8 +212,8 @@ ds_grid_set_region(solidGrid, 0, 16, 14, h - 1, 1);
 ds_grid_set_region(solidGrid, 45, 16, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, w, h);
-edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
 
 test_assert_equals(2, global.navNodeCount);
 test_assert_equals(0, global.navEdgeCount);
@@ -241,7 +241,7 @@ ds_grid_clear(platformGrid, 0);
 ds_grid_set_region(platformGrid, 10, 12, 25, 12, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, platformGrid, -1, -1, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, platformGrid, -1, -1, -1, w, h);
 
 // The ground surface, plus the platform surface standing on nothing but platform.
 test_assert_equals(2, global.navNodeCount);
@@ -251,7 +251,7 @@ test_assert_equals(2, global.navNodeCount);
 test_assert_equals(1, ds_grid_get(nodes, NAV_NODE_FLAGS, 0));
 test_assert_equals(0, ds_grid_get(nodes, NAV_NODE_FLAGS, 1));
 
-edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
 test_assert_equals(1, navCountEdgeType(edges, global.navEdgeCount, NAV_EDGE_DROPTHROUGH));
 
 ds_grid_destroy(edges);
@@ -276,7 +276,7 @@ ds_grid_clear(lethalGrid, 0);
 ds_grid_set_region(lethalGrid, 0, 15, w - 1, 15, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, -1, lethalGrid, -1, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, lethalGrid, -1, -1, w, h);
 test_assert_equals(0, global.navNodeCount);
 
 ds_grid_destroy(nodes);
@@ -305,8 +305,8 @@ ds_grid_clear(platformGrid, 0);
 ds_grid_set_region(platformGrid, 15, 15, w - 1, 15, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, platformGrid, -1, -1, w, h);
-edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, platformGrid, -1, -1, -1, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
 
 test_assert_equals(2, global.navNodeCount);
 test_assert_equals(0, ds_grid_get(nodes, NAV_NODE_FLAGS, 0));
@@ -357,7 +357,7 @@ ds_grid_clear(doorGrid, NAV_DOOR_NONE);
 ds_grid_set_region(doorGrid, 13, 8, 14, 8, NAV_DOOR_LEFT);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, doorGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, doorGrid, -1, w, h);
 
 test_assert_equals(3, global.navNodeCount);
 test_assert_equals(NAV_DOOR_NONE, ds_grid_get(nodes, NAV_NODE_DOOR, 0));
@@ -366,7 +366,7 @@ test_assert_equals(NAV_DOOR_NONE, ds_grid_get(nodes, NAV_NODE_DOOR, 2));
 test_assert_equals(13, ds_grid_get(nodes, NAV_NODE_X0, 1));
 test_assert_equals(14, ds_grid_get(nodes, NAV_NODE_X1, 1));
 
-edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
 
 // Rightward across both boundaries, never leftward - plus the two same-row jump
 // edges (both directions) that leapfrog the door, per the note above.
@@ -409,7 +409,7 @@ ds_grid_clear(platformGrid, 0);
 ds_grid_set_region(platformGrid, 0, 7, w - 1, 7, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, platformGrid, -1, -1, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, platformGrid, -1, -1, -1, w, h);
 
 test_assert_equals(2, global.navNodeCount);
 test_assert_equals(0, ds_grid_get(nodes, NAV_NODE_Y, 0));
@@ -419,7 +419,7 @@ instance_create(48, 0, MoveBoxDown);
 
 nodeGrid = navNodeGrid(nodes, global.navNodeCount, w, h);
 navEdgesBegin();
-navMoveBoxEdges(freeGrid, nodeGrid, w, h);
+navMoveBoxEdges(freeGrid, nodeGrid, -1, -1, w, h);
 ds_grid_resize(global.navAccEdges, NAV_EDGE_FIELDS, max(global.navAccCount, 1));
 edges = navEdgesSortByFrom(global.navAccEdges, global.navAccCount, global.navNodeCount);
 ds_grid_destroy(global.navAccEdges);
@@ -460,8 +460,8 @@ ds_grid_set_region(solidGrid, 15, 16, 29, h - 1, 1);
 ds_grid_set_region(solidGrid, 30, 15, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, w, h);
-edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
 
 global.navNodes = nodes;
 global.navEdges = edges;
@@ -477,7 +477,7 @@ global.navReady = true;
 // Three surfaces, and every one reachable from every other.
 test_assert_equals(3, global.navNodeCount);
 
-path = navFindPath(0, 2);
+path = navFindPath(0, 2, TEAM_RED, false);
 test_assert_equals(true, path >= 0);
 test_assert_equals(3, ds_list_size(path));
 test_assert_equals(0, ds_list_find_value(path, 0));
@@ -485,13 +485,13 @@ test_assert_equals(2, ds_list_find_value(path, 2));
 ds_list_destroy(path);
 
 // A path to itself is one node, not zero and not a loop.
-path = navFindPath(1, 1);
+path = navFindPath(1, 1, TEAM_RED, false);
 test_assert_equals(1, ds_list_size(path));
 ds_list_destroy(path);
 
 // Out of range asks are refused rather than clamped.
-test_assert_equals(-1, navFindPath(0, 99));
-test_assert_equals(-1, navFindPath(-1, 0));
+test_assert_equals(-1, navFindPath(0, 99, TEAM_RED, false));
+test_assert_equals(-1, navFindPath(-1, 0, TEAM_RED, false));
 
 global.navReady = false;
 global.navEdgeIdx = oldIdx;
@@ -501,6 +501,188 @@ ds_grid_destroy(edges);
 ds_grid_destroy(nodes);
 ds_grid_destroy(freeGrid);
 ds_grid_destroy(solidGrid);
+
+// ---------------------------------------------------------------------------
+// navGatePassable's truth table, straight off charSetSolids.gml.
+//
+// Your own team gate is open unless you are carrying the intel out through it; an
+// enemy intel gate is shut only to a carrier; a setup gate is shut for everyone while
+// setup is running. Nothing here touches the graph - this is the whole of what the
+// build cannot decide for itself (F26), so it is worth pinning on its own.
+// ---------------------------------------------------------------------------
+test_assert_equals(true, navGatePassable(NAV_GATE_NONE, TEAM_BLUE, true));
+
+test_assert_equals(true, navGatePassable(NAV_GATE_TEAM_RED, TEAM_RED, false));
+test_assert_equals(false, navGatePassable(NAV_GATE_TEAM_RED, TEAM_RED, true));
+test_assert_equals(false, navGatePassable(NAV_GATE_TEAM_RED, TEAM_BLUE, false));
+test_assert_equals(true, navGatePassable(NAV_GATE_TEAM_BLUE, TEAM_BLUE, false));
+test_assert_equals(false, navGatePassable(NAV_GATE_TEAM_BLUE, TEAM_RED, false));
+
+// An intel gate is a filter on carriers, not on teams: everyone else walks through.
+test_assert_equals(true, navGatePassable(NAV_GATE_INTEL_RED, TEAM_BLUE, false));
+test_assert_equals(false, navGatePassable(NAV_GATE_INTEL_RED, TEAM_BLUE, true));
+test_assert_equals(true, navGatePassable(NAV_GATE_INTEL_RED, TEAM_RED, true));
+
+// A code this build does not know can only be a cache written by a newer version, and
+// is refused rather than waved through.
+test_assert_equals(false, navGatePassable(99, TEAM_RED, false));
+
+// The setup gate reads live state, so it is only asserted where that state is
+// actually determinate: FauxCPHUD overrides global.setupTimer when a CP map is up.
+if(variable_global_exists("setupTimer") and instance_number(FauxCPHUD) == 0)
+{
+    oldSetup = global.setupTimer;
+    global.setupTimer = 0;
+    test_assert_equals(true, navGatePassable(NAV_GATE_SETUP, TEAM_RED, false));
+    global.setupTimer = 180;
+    test_assert_equals(false, navGatePassable(NAV_GATE_SETUP, TEAM_RED, false));
+    global.setupTimer = oldSetup;
+}
+
+// ---------------------------------------------------------------------------
+// A team gate across a corridor, end to end: node cut, edge annotation, and A*
+// refusing to route through it for whoever may not pass.
+//
+// Same flat floor as the door case, but the gate band is a full-height column at
+// x = 13..14 rather than two cells on the anchor row, which is what a real gate stamp
+// looks like once navGateStamp has dilated it. That matters: the two-cell version
+// would cut the node correctly and still leave navJumpEdges free to hop the gap above
+// it.
+//
+// Three nodes - floor, gate, floor - and six edges: four same-row walks across the two
+// boundaries, plus the pair of jumps that leapfrog the gate node entirely. Those jumps
+// are exactly why the gate code lives on the edge rather than only on the node; their
+// arcs pass through the gate column at head height, so they carry its code too and are
+// refused along with everything else.
+// ---------------------------------------------------------------------------
+w = 30;
+h = 20;
+solidGrid = ds_grid_create(w, h);
+ds_grid_clear(solidGrid, 0);
+ds_grid_set_region(solidGrid, 0, 15, w - 1, h - 1, 1);
+
+gateGrid = ds_grid_create(w, h);
+ds_grid_clear(gateGrid, NAV_GATE_NONE);
+ds_grid_set_region(gateGrid, 13, 0, 14, 8, NAV_GATE_TEAM_RED);
+
+freeGrid = navClearanceBuild(solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, gateGrid, w, h);
+
+test_assert_equals(3, global.navNodeCount);
+test_assert_equals(NAV_GATE_NONE, ds_grid_get(nodes, NAV_NODE_GATE, 0));
+test_assert_equals(NAV_GATE_TEAM_RED, ds_grid_get(nodes, NAV_NODE_GATE, 1));
+test_assert_equals(NAV_GATE_NONE, ds_grid_get(nodes, NAV_NODE_GATE, 2));
+test_assert_equals(13, ds_grid_get(nodes, NAV_NODE_X0, 1));
+test_assert_equals(14, ds_grid_get(nodes, NAV_NODE_X1, 1));
+
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, gateGrid, w, h);
+
+test_assert_equals(6, global.navEdgeCount);
+test_assert_equals(4, navCountEdgeType(edges, global.navEdgeCount, NAV_EDGE_WALK));
+test_assert_equals(2, navCountEdgeType(edges, global.navEdgeCount, NAV_EDGE_JUMP));
+
+// Sorted by from-node, insertion order preserved within each group. Entering the gate
+// is gated; leaving it is not, which is what keeps a bot already standing in one from
+// being stranded there.
+test_assert_equals(1, ds_grid_get(edges, NAV_EDGE_TO, 0));
+test_assert_equals(NAV_GATE_TEAM_RED, ds_grid_get(edges, NAV_EDGE_GATE, 0));
+test_assert_equals(2, ds_grid_get(edges, NAV_EDGE_TO, 1));
+test_assert_equals(NAV_EDGE_JUMP, ds_grid_get(edges, NAV_EDGE_TYPE, 1));
+test_assert_equals(NAV_GATE_TEAM_RED, ds_grid_get(edges, NAV_EDGE_GATE, 1));
+test_assert_equals(0, ds_grid_get(edges, NAV_EDGE_TO, 2));
+test_assert_equals(NAV_GATE_NONE, ds_grid_get(edges, NAV_EDGE_GATE, 2));
+test_assert_equals(2, ds_grid_get(edges, NAV_EDGE_TO, 3));
+test_assert_equals(NAV_GATE_NONE, ds_grid_get(edges, NAV_EDGE_GATE, 3));
+
+global.navNodes = nodes;
+global.navEdges = edges;
+testIdx = navEdgeIndex(edges, global.navEdgeCount, global.navNodeCount);
+oldIdx = -1;
+if(variable_global_exists("navEdgeIdx"))
+    oldIdx = global.navEdgeIdx;
+global.navEdgeIdx = testIdx;
+global.navReady = true;
+
+// A red bot walks its own gate: floor, gate, floor.
+path = navFindPath(0, 2, TEAM_RED, false);
+test_assert_equals(true, path >= 0);
+test_assert_equals(3, ds_list_size(path));
+test_assert_equals(1, ds_list_find_value(path, 1));
+ds_list_destroy(path);
+
+// The same bot carrying the intel may not take its own gate out, and there is no way
+// round on this map.
+test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, true));
+
+// Neither may a blue bot - including by the jump that hops the gate node.
+test_assert_equals(-1, navFindPath(0, 2, TEAM_BLUE, false));
+
+// But a blue bot that somehow starts inside the gate can still get out of it.
+path = navFindPath(1, 2, TEAM_BLUE, false);
+test_assert_equals(true, path >= 0);
+test_assert_equals(2, ds_list_size(path));
+ds_list_destroy(path);
+
+global.navReady = false;
+global.navEdgeIdx = oldIdx;
+ds_grid_destroy(testIdx);
+
+ds_grid_destroy(edges);
+ds_grid_destroy(nodes);
+ds_grid_destroy(freeGrid);
+ds_grid_destroy(gateGrid);
+ds_grid_destroy(solidGrid);
+
+// ---------------------------------------------------------------------------
+// navGateStamp dilates a real gate instance up and left by the character box.
+//
+// The only gate case that creates an instance, because the stamp is derived from
+// bbox_*, which only a live instance has. The expected region is computed from that
+// instance's own bbox rather than from a guess at the sprite's size, so this pins the
+// dilation rule and not the art.
+//
+// navGateStamp is called directly rather than through navMarkInstances, which would
+// also sweep up every gate the running map already has - this suite has to give the
+// same answer run from a cold main menu and run mid-game on ctf_truefort, and a real
+// spawn gate landing on one of the probe cells below would decide otherwise.
+//
+// Why dilate at all: a nav anchor is the top-left of a NAV_BOX_W x NAV_BOX_H body, so
+// a gate covering only rows an anchor never sits on - one hanging clear of the floor,
+// say - would cut no node boundary at all and the graph would let both teams stroll
+// through it.
+// ---------------------------------------------------------------------------
+w = 120;
+h = 120;
+gateGrid = ds_grid_create(w, h);
+ds_grid_clear(gateGrid, NAV_GATE_NONE);
+
+gateInst = instance_create(240, 240, RedTeamGate);
+test_assert_equals(TEAM_RED, gateInst.team);
+with(gateInst)
+{
+    gl = floor(bbox_left / NAV_CELL_SIZE);
+    gt = floor(bbox_top / NAV_CELL_SIZE);
+    gr = floor(bbox_right / NAV_CELL_SIZE);
+    gb = floor(bbox_bottom / NAV_CELL_SIZE);
+    navGateStamp(gateGrid, w, h, NAV_GATE_TEAM_RED);
+}
+
+// The gate's own footprint, and the dilated corner an anchor would stand at.
+test_assert_equals(NAV_GATE_TEAM_RED, ds_grid_get(gateGrid, gl, gt));
+test_assert_equals(NAV_GATE_TEAM_RED, ds_grid_get(gateGrid, gr, gb));
+test_assert_equals(NAV_GATE_TEAM_RED, ds_grid_get(gateGrid, gl - (NAV_BOX_W - 1), gt - (NAV_BOX_H - 1)));
+
+// One cell further out is clear: the dilation is exactly a body, not a blanket.
+test_assert_equals(NAV_GATE_NONE, ds_grid_get(gateGrid, gl - NAV_BOX_W, gt));
+test_assert_equals(NAV_GATE_NONE, ds_grid_get(gateGrid, gl, gt - NAV_BOX_H));
+
+// Down and right are not dilated - a body below or right of the gate is clear of it.
+test_assert_equals(NAV_GATE_NONE, ds_grid_get(gateGrid, gr + 1, gb));
+test_assert_equals(NAV_GATE_NONE, ds_grid_get(gateGrid, gr, gb + 1));
+
+with(gateInst)
+    instance_destroy();
+ds_grid_destroy(gateGrid);
 
 // ---------------------------------------------------------------------------
 // The cache key distinguishes internal maps, which all advertise an empty MD5.

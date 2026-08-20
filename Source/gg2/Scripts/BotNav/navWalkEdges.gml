@@ -19,12 +19,19 @@
 /// single row below each node, and the single next node in sort order, have to be
 /// checked instead of all n.
 ///
+/// Each edge carries the gate code of the node it arrives at, and nothing else. Walk
+/// edges are the only ones that need no arc sampling to work that out: a walk crosses
+/// exactly one node boundary, so the only gate it can meet is the one on the far side.
+/// Taking the destination's code rather than either end's is also what lets a bot
+/// walk *out* of a gate it may not walk into - a red bot that grabbed the intel inside
+/// its own spawn, or anyone the setup gates just shut around, still gets edges out.
+///
 /// Cost is the distance between run midpoints for a step, or a flat 1 cell for a
 /// same-row touch (they are, by construction, exactly adjacent). Both approximate
 /// travel while the path follower does not yet track where along a surface it
 /// entered. Refine it together with the entry-point sliding in milestone 5.
 
-var nodes, nodeCount, h, rowStart, i, j, cy, ax0, ax1, bx0, bx1, cost, midA, midB, doorA, doorB;
+var nodes, nodeCount, h, rowStart, i, j, cy, ax0, ax1, bx0, bx1, cost, midA, midB, doorA, doorB, gateA, gateB;
 nodes = argument0;
 nodeCount = argument1;
 h = argument2;
@@ -59,8 +66,8 @@ for(i = 0; i < nodeCount; i += 1)
             midA = (ax0 + ax1) / 2;
             midB = (bx0 + bx1) / 2;
             cost = max(1, abs(midA - midB));
-            navEdgeAdd(i, j, NAV_EDGE_WALK, 0, 0, cost);
-            navEdgeAdd(j, i, NAV_EDGE_WALK, 0, 0, cost);
+            navEdgeAdd(i, j, NAV_EDGE_WALK, 0, 0, cost, ds_grid_get(nodes, NAV_NODE_GATE, j));
+            navEdgeAdd(j, i, NAV_EDGE_WALK, 0, 0, cost, ds_grid_get(nodes, NAV_NODE_GATE, i));
         }
 
         j += 1;
@@ -81,12 +88,14 @@ for(i = 0; i < nodeCount - 1; i += 1)
 
     doorA = ds_grid_get(nodes, NAV_NODE_DOOR, i);
     doorB = ds_grid_get(nodes, NAV_NODE_DOOR, i + 1);
+    gateA = ds_grid_get(nodes, NAV_NODE_GATE, i);
+    gateB = ds_grid_get(nodes, NAV_NODE_GATE, i + 1);
 
     // i -> i+1 crosses rightward; i+1 -> i crosses leftward.
     if(doorA != NAV_DOOR_RIGHT and doorB != NAV_DOOR_RIGHT)
-        navEdgeAdd(i, i + 1, NAV_EDGE_WALK, 0, 0, 1);
+        navEdgeAdd(i, i + 1, NAV_EDGE_WALK, 0, 0, 1, gateB);
     if(doorA != NAV_DOOR_LEFT and doorB != NAV_DOOR_LEFT)
-        navEdgeAdd(i + 1, i, NAV_EDGE_WALK, 0, 0, 1);
+        navEdgeAdd(i + 1, i, NAV_EDGE_WALK, 0, 0, 1, gateA);
 }
 
 ds_grid_destroy(rowStart);

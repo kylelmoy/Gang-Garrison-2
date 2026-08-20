@@ -1,4 +1,4 @@
-/// navMarkInstances(solidGrid, platformGrid, lethalGrid, doorGrid, w, h)
+/// navMarkInstances(solidGrid, platformGrid, lethalGrid, doorGrid, gateGrid, w, h)
 /// Stamps the map objects that are not part of the walkmask into the nav grids.
 ///
 /// The walkmask is only the terrain. PlayerWalls, drop-through platforms, the lethal
@@ -22,10 +22,23 @@
 ///                 than to remove standability, and navWalkEdges reads it back to
 ///                 suppress the disallowed direction across that boundary.
 ///
-/// Gates are deliberately absent. TeamGate, IntelGate and ControlPointSetupGate are
-/// per-frame conditional solids - your own team's gate is passable, an IntelGate only
-/// blocks a carrier - so baking them into the grid would bake in one team's view of
-/// the map (F26). They belong in edge costs evaluated at query time.
+///   gateGrid      gains TeamGate, IntelGate and ControlPointSetupGate as NAV_GATE_*
+///                 codes. These are per-frame conditional solids - your own team's
+///                 gate is passable, an IntelGate only blocks a carrier, a setup gate
+///                 shuts on a timer - so they must NOT reach solidGrid: that would
+///                 bake one team's view of the map into a graph both teams share
+///                 (F26). What is baked is only *which* gate is where; whether it is
+///                 open is navGatePassable's answer, at query time.
+///
+/// The gate stamp is dilated up and to the left by the character box minus one cell,
+/// which the other grids are not. The others answer "what is in this cell"; this one
+/// has to answer "would a character anchored here be standing in the gate", and an
+/// anchor is the top-left of a NAV_BOX_W x NAV_BOX_H body. Without the dilation a
+/// gate that does not happen to cover the anchor row - one hanging clear of the floor,
+/// or a short one down at foot level - cuts no node boundary at all, and the graph
+/// says both teams walk straight through it. Being generous costs only that a bot
+/// stops a body's width short of a gate it may not pass, which is where it wanted to
+/// stop anyway.
 ///
 /// Marks each instance's bounding box rather than testing per cell: there are dozens
 /// of instances against up to 560,000 cells, and ds_grid_set_region is native.
@@ -34,13 +47,14 @@
 /// built. A moving platform therefore reads as a static ledge at one end of its
 /// travel. Correct handling needs a time-varying edge, which nothing here models yet.
 
-var solidGrid, platformGrid, lethalGrid, doorGrid, w, h;
+var solidGrid, platformGrid, lethalGrid, doorGrid, gateGrid, w, h;
 solidGrid = argument0;
 platformGrid = argument1;
 lethalGrid = argument2;
 doorGrid = argument3;
-w = argument4;
-h = argument5;
+gateGrid = argument4;
+w = argument5;
+h = argument6;
 
 with(PlayerWall)
 {
@@ -124,4 +138,39 @@ with(RightDoor)
             min(w - 1, floor(bbox_right / NAV_CELL_SIZE)),
             min(h - 1, floor(bbox_bottom / NAV_CELL_SIZE)), NAV_DOOR_RIGHT);
     }
+}
+
+// Gates last, so that where two of them overlap the later stamp wins; the three kinds
+// are never placed on top of each other on any shipped map, and one code per cell is
+// all a node boundary can carry anyway.
+//
+// TeamGate before IntelGate is deliberate: RedIntelGate and RedTeamGate are siblings
+// under Gate rather than parent and child, so no instance is caught twice, but the
+// ordering makes the intent explicit if that ever changes.
+with(TeamGate)
+{
+    if(gateGrid >= 0)
+    {
+        if(team == TEAM_RED)
+            navGateStamp(gateGrid, w, h, NAV_GATE_TEAM_RED);
+        else
+            navGateStamp(gateGrid, w, h, NAV_GATE_TEAM_BLUE);
+    }
+}
+
+with(IntelGate)
+{
+    if(gateGrid >= 0)
+    {
+        if(team == TEAM_RED)
+            navGateStamp(gateGrid, w, h, NAV_GATE_INTEL_RED);
+        else
+            navGateStamp(gateGrid, w, h, NAV_GATE_INTEL_BLUE);
+    }
+}
+
+with(ControlPointSetupGate)
+{
+    if(gateGrid >= 0)
+        navGateStamp(gateGrid, w, h, NAV_GATE_SETUP);
 }

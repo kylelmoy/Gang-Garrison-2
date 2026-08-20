@@ -1,7 +1,21 @@
-/// navFindPath(startNode, goalNode)
-/// A* over the built nav graph. Returns a ds_list of node indices from startNode to
-/// goalNode inclusive, or -1 if the goal is unreachable or the graph is not ready.
-/// The caller owns the returned list and must ds_list_destroy it.
+/// navFindPath(startNode, goalNode, team, hasIntel)
+/// A* over the built nav graph, for a character of `team` carrying the intel or not.
+/// Returns a ds_list of node indices from startNode to goalNode inclusive, or -1 if
+/// the goal is unreachable or the graph is not ready. The caller owns the returned
+/// list and must ds_list_destroy it.
+///
+/// team/hasIntel are what make gates work. Everything else in the graph is static -
+/// one edge set serves every bot - but a gate's passability depends on who is asking
+/// (F26), so gate nodes are carried in the graph with full connectivity and refused
+/// here, per query, by navGatePassable. The effect is that a blue bot's search simply
+/// cannot expand through a red spawn gate, so it routes the long way round rather than
+/// walking into a wall, and the same graph still serves the red bots going through it.
+///
+/// The test is on the edge rather than on the node it arrives at, because an arc can
+/// cross a gate without landing on it (see navEdgeAdd). It also falls out of that that
+/// a bot standing inside a gate it may not pass - one that just picked up the intel,
+/// or anyone the setup gates shut around - still gets edges *out*: those arrive
+/// somewhere ungated and so are never refused.
 ///
 /// Uses ds_priority for the open set with lazy deletion - a node can be pushed more
 /// than once and stale copies are skipped when popped, because they are already
@@ -20,12 +34,14 @@
 /// least the straight-line distance they cover vertically, so they do not break it
 /// either.
 
-var startNode, goalNode, openSet, gScore, cameFrom, closed;
+var startNode, goalNode, team, hasIntel, openSet, gScore, cameFrom, closed;
 var current, nb, e, eStart, eCount, i, tentative, path, guard;
 var gx, gy, cx, cy, nx, ny;
 
 startNode = argument0;
 goalNode = argument1;
+team = argument2;
+hasIntel = argument3;
 
 if(!global.navReady)
     return -1;
@@ -83,6 +99,8 @@ while(!ds_priority_empty(openSet))
         if(nb < 0 or nb >= global.navNodeCount)
             continue;
         if(ds_grid_get(closed, 0, nb) == 1)
+            continue;
+        if(!navGatePassable(ds_grid_get(global.navEdges, NAV_EDGE_GATE, i), team, hasIntel))
             continue;
 
         tentative = ds_grid_get(gScore, 0, current) + ds_grid_get(global.navEdges, NAV_EDGE_COST, i);

@@ -1,4 +1,4 @@
-/// navEdgesBuild(nodes, nodeCount, freeGrid, w, h)
+/// navEdgesBuild(nodes, nodeCount, freeGrid, gateGrid, w, h)
 /// Runs every edge generator and returns the finished edge grid, setting
 /// global.navEdgeCount to how many it holds.
 ///
@@ -6,18 +6,22 @@
 /// into the live graph's variable would free the grid a running server is still
 /// reading from.
 ///
+/// gateGrid may be -1 for a caller that has no gates - the unit tests mostly do, and
+/// the generators each guard the handle rather than the whole graph doing so once.
+///
 /// Edges come out grouped by their from-node, which is what lets navEdgeIndex reduce
 /// adjacency to a contiguous range per node instead of a scan of the whole list on
 /// every A* expansion.
 ///
 /// The caller owns the returned grid and must ds_grid_destroy it.
 
-var nodes, nodeCount, freeGrid, w, h, nodeGrid, rowStart, sorted;
+var nodes, nodeCount, freeGrid, gateGrid, w, h, nodeGrid, rowStart, sorted;
 nodes = argument0;
 nodeCount = argument1;
 freeGrid = argument2;
-w = argument3;
-h = argument4;
+gateGrid = argument3;
+w = argument4;
+h = argument5;
 
 navEdgesBegin();
 
@@ -26,14 +30,14 @@ if(nodeCount > 0)
     navWalkEdges(nodes, nodeCount, h);
 
     nodeGrid = navNodeGrid(nodes, nodeCount, w, h);
-    navFallEdges(nodes, nodeCount, freeGrid, nodeGrid, w, h, 0, nodeCount);
-    navDropEdges(nodes, nodeCount, freeGrid, nodeGrid, w, h, 0, nodeCount);
+    navFallEdges(nodes, nodeCount, freeGrid, nodeGrid, gateGrid, w, h, 0, nodeCount);
+    navDropEdges(nodes, nodeCount, freeGrid, nodeGrid, gateGrid, w, h, 0, nodeCount);
 
     rowStart = navRowIndex(nodes, nodeCount, h);
-    navJumpEdges(nodes, nodeCount, freeGrid, nodeGrid, rowStart, w, h, 0, nodeCount);
+    navJumpEdges(nodes, nodeCount, freeGrid, nodeGrid, gateGrid, rowStart, w, h, 0, nodeCount);
     ds_grid_destroy(rowStart);
 
-    navMoveBoxEdges(freeGrid, nodeGrid, w, h);
+    navMoveBoxEdges(freeGrid, nodeGrid, gateGrid, nodes, w, h);
 
     ds_grid_destroy(nodeGrid);
 }

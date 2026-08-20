@@ -1,4 +1,4 @@
-/// navJumpEdges(nodes, nodeCount, freeGrid, nodeGrid, rowStart, w, h, fromNode, toNode)
+/// navJumpEdges(nodes, nodeCount, freeGrid, nodeGrid, gateGrid, rowStart, w, h, fromNode, toNode)
 /// Appends jump edges for nodes fromNode .. toNode-1: leaping from the end of one
 /// surface onto another that a walk or a fall cannot reach.
 ///
@@ -23,27 +23,39 @@
 /// deliberate v1 approximation: it catches jumps into ceilings and through walls,
 /// while genuinely exact arcs are the trajectory-fan work (F35).
 ///
+/// gateGrid may be -1. When it is not, the arc of each edge that survives is sampled
+/// against it and the first gate crossed becomes the edge's gate code. This is the one
+/// place gates genuinely have to be arc-sampled rather than read off a node: a spawn
+/// gate stands in a doorway on a flat floor, its own clearance is open, and both
+/// halves of that floor are separate nodes - so without this every gate in the game
+/// would have a pair of jump edges hopping straight over it, which is precisely the
+/// gap already documented for one-way doors and deliberately accepted there because a
+/// door is only ever a two-cell nuisance.
+///
 /// Takes a node range so the build can spread it across frames.
 
-var nodes, nodeCount, freeGrid, nodeGrid, rowStart, w, h, fromNode, toNode;
+var nodes, nodeCount, freeGrid, nodeGrid, gateGrid, rowStart, w, h, fromNode, toNode;
 var i, j, side, dir, ay, ax0, ax1, by, bx0, bx1, takeoff, xLand;
 var dCells, dWorld, tHit, peak, riseWorld, cost, k, t, sx, sy, blocked, minRow, maxRow, ry, queue, kept;
+var srcGate, arcGate, cellGate;
 
 nodes = argument0;
 nodeCount = argument1;
 freeGrid = argument2;
 nodeGrid = argument3;
-rowStart = argument4;
-w = argument5;
-h = argument6;
-fromNode = argument7;
-toNode = argument8;
+gateGrid = argument4;
+rowStart = argument5;
+w = argument6;
+h = argument7;
+fromNode = argument8;
+toNode = argument9;
 
 for(i = fromNode; i < toNode; i += 1)
 {
     ay = ds_grid_get(nodes, NAV_NODE_Y, i);
     ax0 = ds_grid_get(nodes, NAV_NODE_X0, i);
     ax1 = ds_grid_get(nodes, NAV_NODE_X1, i);
+    srcGate = ds_grid_get(nodes, NAV_NODE_GATE, i);
 
     // Apex is about 9.6 cells, so nothing above that is ever reachable; below, the
     // fall cap bounds how far a jump can usefully carry.
@@ -195,7 +207,33 @@ for(i = fromNode; i < toNode; i += 1)
         dCells = abs(xLand - takeoff);
         tHit = (dCells * NAV_CELL_SIZE) / NAV_JUMP_VX;
         cost = max(1, dCells) + NAV_JUMP_PENALTY;
-        navEdgeAdd(i, j, NAV_EDGE_JUMP, round(NAV_JUMP_VX), round(tHit), cost);
+
+        // Re-walk the arc for gates only now, rather than in the candidate loop: the
+        // fan considers every surface in the envelope and keeps three, so sampling
+        // here is a tenth of the work for the same answer.
+        arcGate = NAV_GATE_NONE;
+        if(gateGrid >= 0)
+        {
+            for(k = 1; k <= NAV_JUMP_SAMPLES; k += 1)
+            {
+                if(arcGate != NAV_GATE_NONE)
+                    break;
+
+                t = tHit * k / NAV_JUMP_SAMPLES;
+                sx = round(takeoff + dir * (NAV_JUMP_VX * t) / NAV_CELL_SIZE);
+                sy = round(ay - (NAV_JUMP_V0 * t - NAV_JUMP_GRAVITY * t * t / 2) / NAV_CELL_SIZE);
+                if(sx < 0 or sx > w - NAV_BOX_W or sy < 0 or sy > h - NAV_BOX_H)
+                    continue;
+
+                cellGate = ds_grid_get(gateGrid, sx, sy);
+                if(cellGate != NAV_GATE_NONE and cellGate != srcGate)
+                    arcGate = cellGate;
+            }
+        }
+        if(arcGate == NAV_GATE_NONE)
+            arcGate = ds_grid_get(nodes, NAV_NODE_GATE, j);
+
+        navEdgeAdd(i, j, NAV_EDGE_JUMP, round(NAV_JUMP_VX), round(tHit), cost, arcGate);
         kept += 1;
     }
     ds_priority_destroy(queue);

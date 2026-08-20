@@ -1,10 +1,11 @@
-/// navNodesExtract(freeGrid, solidGrid, platformGrid, lethalGrid, doorGrid, w, h)
+/// navNodesExtract(freeGrid, solidGrid, platformGrid, lethalGrid, doorGrid, gateGrid, w, h)
 /// Run-length encodes the clearance grid into floor surfaces: one node per maximal
 /// horizontal run of cells a character can stand on. Returns a ds_grid of
 /// NAV_NODE_FIELDS columns by (number of nodes) rows, and sets global.navNodeCount.
 ///
-/// platformGrid, lethalGrid and doorGrid may be -1 when a caller has none of them -
-/// the unit tests build bare terrain and pass -1 for whichever it does not need.
+/// platformGrid, lethalGrid, doorGrid and gateGrid may be -1 when a caller has none
+/// of them - the unit tests build bare terrain and pass -1 for whichever they do not
+/// need.
 ///
 /// Read the count from global.navNodeCount, not ds_grid_height - a graph with no
 /// nodes still returns a one-row grid, because a zero-height ds_grid is not worth
@@ -34,17 +35,26 @@
 /// footprint - and NAV_NODE_DOOR records which way it blocks. navWalkEdges reads it
 /// back when linking same-row neighbours.
 ///
+/// gateGrid cuts runs the same way, into NAV_NODE_GATE. The difference is who reads it
+/// back: a door blocks a fixed direction for everybody, so navWalkEdges can settle it
+/// at build time, but whether a gate is open depends on the team, intel carriage and
+/// setup state of whoever is asking (F26), so the gate node is emitted with full
+/// connectivity and navFindPath decides per query via navGatePassable. Crossing a gate
+/// therefore means routing *through* its node, which A* will refuse to enter when the
+/// caller may not pass.
+///
 /// Nodes come out sorted by y then x, which navWalkEdges relies on to index rows.
 
-var freeGrid, solidGrid, platformGrid, lethalGrid, doorGrid, w, h;
-var nodes, capacity, count, cx, cy, runStart, support, psupport, lethal, lastX, lastY, belowY, platformOnly, standable, doorCode, sameDoor;
+var freeGrid, solidGrid, platformGrid, lethalGrid, doorGrid, gateGrid, w, h;
+var nodes, capacity, count, cx, cy, runStart, support, psupport, lethal, lastX, lastY, belowY, platformOnly, standable, doorCode, sameDoor, gateCode, sameGate;
 freeGrid = argument0;
 solidGrid = argument1;
 platformGrid = argument2;
 lethalGrid = argument3;
 doorGrid = argument4;
-w = argument5;
-h = argument6;
+gateGrid = argument5;
+w = argument6;
+h = argument7;
 
 capacity = 64;
 nodes = ds_grid_create(NAV_NODE_FIELDS, capacity);
@@ -92,6 +102,10 @@ for(cy = 0; cy <= lastY; cy += 1)
             if(doorGrid >= 0)
                 doorCode = ds_grid_get(doorGrid, cx, cy);
             sameDoor = true;
+            gateCode = NAV_GATE_NONE;
+            if(gateGrid >= 0)
+                gateCode = ds_grid_get(gateGrid, cx, cy);
+            sameGate = true;
 
             // The run is also cut where the kind of support changes. A stretch that is
             // half ground and half platform is one continuous walkable surface, but
@@ -107,7 +121,7 @@ for(cy = 0; cy <= lastY; cy += 1)
             // languages, so that inline form calls ds_grid_get on doorGrid even when
             // it is -1 and throws "Data structure with index does not exist" on every
             // caller that has no door grid to pass.
-            while(cx <= lastX and standable and ((support == 0 and psupport > 0) == platformOnly) and sameDoor)
+            while(cx <= lastX and standable and ((support == 0 and psupport > 0) == platformOnly) and sameDoor and sameGate)
             {
                 if(cx + NAV_BOX_W < w)
                 {
@@ -129,6 +143,9 @@ for(cy = 0; cy <= lastY; cy += 1)
                 sameDoor = true;
                 if(doorGrid >= 0 and cx <= lastX)
                     sameDoor = (ds_grid_get(doorGrid, cx, cy) == doorCode);
+                sameGate = true;
+                if(gateGrid >= 0 and cx <= lastX)
+                    sameGate = (ds_grid_get(gateGrid, cx, cy) == gateCode);
             }
 
             if(count >= capacity)
@@ -142,6 +159,7 @@ for(cy = 0; cy <= lastY; cy += 1)
             ds_grid_set(nodes, NAV_NODE_X1, count, cx - 1);
             ds_grid_set(nodes, NAV_NODE_FLAGS, count, platformOnly);
             ds_grid_set(nodes, NAV_NODE_DOOR, count, doorCode);
+            ds_grid_set(nodes, NAV_NODE_GATE, count, gateCode);
             count += 1;
         }
         else

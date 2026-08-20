@@ -23,6 +23,7 @@ if(!variable_global_exists("navBuildState"))
     global.navPlatform = -1;
     global.navLethal = -1;
     global.navDoor = -1;
+    global.navGate = -1;
     global.navRowStart = -1;
     global.navAccEdges = -1;
     global.navAccCount = 0;
@@ -75,6 +76,11 @@ if(variable_global_exists("navDoor") and global.navDoor >= 0)
 {
     ds_grid_destroy(global.navDoor);
     global.navDoor = -1;
+}
+if(variable_global_exists("navGate") and global.navGate >= 0)
+{
+    ds_grid_destroy(global.navGate);
+    global.navGate = -1;
 }
 if(variable_global_exists("navCellGrid") and global.navCellGrid >= 0)
 {

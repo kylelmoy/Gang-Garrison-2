@@ -1,4 +1,4 @@
-/// navFallEdges(nodes, nodeCount, freeGrid, nodeGrid, w, h, fromNode, toNode)
+/// navFallEdges(nodes, nodeCount, freeGrid, nodeGrid, gateGrid, w, h, fromNode, toNode)
 /// Appends fall edges for nodes fromNode .. toNode-1: walking off the end of a
 /// surface and dropping to whatever is below.
 ///
@@ -13,18 +13,25 @@
 /// keeps the graph honest, and drifting falls are better added as part of the
 /// trajectory work than guessed at here.
 ///
+/// gateGrid may be -1. When it is not, the swept column is checked for gate cells and
+/// the first one that is not the gate the fall started inside becomes the edge's gate
+/// code, so a drop past a spawn gate is offered only to whoever may pass it. The sweep
+/// is in anchor coordinates and the gate stamp is dilated to match (navGateStamp), so
+/// a hit means the character's body would really be inside the gate on the way down.
+///
 /// Takes a node range so the build can spread it across frames like the other stages.
 
-var nodes, nodeCount, freeGrid, nodeGrid, w, h, fromNode, toNode;
-var i, side, cy, ax0, ax1, xEdge, yy, landed, maxY, dropped, cost;
+var nodes, nodeCount, freeGrid, nodeGrid, gateGrid, w, h, fromNode, toNode;
+var i, side, cy, ax0, ax1, xEdge, yy, landed, maxY, dropped, cost, srcGate, arcGate, cellGate;
 nodes = argument0;
 nodeCount = argument1;
 freeGrid = argument2;
 nodeGrid = argument3;
-w = argument4;
-h = argument5;
-fromNode = argument6;
-toNode = argument7;
+gateGrid = argument4;
+w = argument5;
+h = argument6;
+fromNode = argument7;
+toNode = argument8;
 
 maxY = h - NAV_BOX_H;
 
@@ -33,6 +40,7 @@ for(i = fromNode; i < toNode; i += 1)
     cy = ds_grid_get(nodes, NAV_NODE_Y, i);
     ax0 = ds_grid_get(nodes, NAV_NODE_X0, i);
     ax1 = ds_grid_get(nodes, NAV_NODE_X1, i);
+    srcGate = ds_grid_get(nodes, NAV_NODE_GATE, i);
 
     for(side = 0; side < 2; side += 1)
     {
@@ -52,11 +60,22 @@ for(i = fromNode; i < toNode; i += 1)
 
         landed = -1;
         dropped = 0;
+        arcGate = NAV_GATE_NONE;
         for(yy = cy + 1; yy <= min(maxY, cy + NAV_MAX_FALL); yy += 1)
         {
             // Something solid interrupts the drop before any surface does.
             if(ds_grid_get(freeGrid, xEdge, yy) != 1)
                 break;
+
+            // Kept out of the loop condition on purpose: GM8 evaluates both sides of
+            // and/or unconditionally, so a folded "gateGrid < 0 or ..." guard would
+            // still call ds_grid_get on -1 (F40).
+            if(arcGate == NAV_GATE_NONE and gateGrid >= 0)
+            {
+                cellGate = ds_grid_get(gateGrid, xEdge, yy);
+                if(cellGate != NAV_GATE_NONE and cellGate != srcGate)
+                    arcGate = cellGate;
+            }
 
             dropped += 1;
             landed = ds_grid_get(nodeGrid, xEdge, yy);
@@ -69,7 +88,9 @@ for(i = fromNode; i < toNode; i += 1)
             // Falling is cheap horizontally but should not be preferred over a level
             // walk to the same place, so charge the drop distance.
             cost = max(1, dropped);
-            navEdgeAdd(i, landed, NAV_EDGE_FALL, 0, dropped, cost);
+            if(arcGate == NAV_GATE_NONE)
+                arcGate = ds_grid_get(nodes, NAV_NODE_GATE, landed);
+            navEdgeAdd(i, landed, NAV_EDGE_FALL, 0, dropped, cost, arcGate);
         }
     }
 }

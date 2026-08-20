@@ -1,4 +1,4 @@
-/// navMoveBoxEdges(freeGrid, nodeGrid, w, h)
+/// navMoveBoxEdges(freeGrid, nodeGrid, gateGrid, nodes, w, h)
 /// Appends one edge per MoveBoxUp/Down/Left/Right instance in the room: walking into
 /// it accelerates the character while inside its bounding box, exactly as
 /// Character's own collision code does it (Collision with MoveBoxUp/Down/Left/Right.xml
@@ -18,18 +18,26 @@
 /// most a handful of MoveBox instances on any shipped map, against hundreds of nodes,
 /// so it costs nothing next to the stages either side of it.
 ///
+/// gateGrid may be -1, and `nodes` may be -1 with it. When both are supplied the
+/// simulated path is sampled for gate cells the same way navJumpEdges samples an arc,
+/// so a boost that carries a character through a gate is offered only to whoever may
+/// pass it. `nodes` is needed only to read the entry node's own gate code, so that a
+/// box standing inside a gate does not charge every edge leaving it.
+///
 /// Cost is charged in ticks alone, no jump-style penalty - F24 lists these among the
 /// map's "free traversal edges", so a route through one should not be punished
 /// relative to walking the same ground.
 
-var freeGrid, nodeGrid, w, h;
+var freeGrid, nodeGrid, gateGrid, nodes, w, h;
 var maxY, entryX, entryY, entryNode, pushX, pushY, boxL, boxT, boxR, boxB;
-var vx, vy, wx, wy, t, cx, cy, landed, blocked, cost;
+var vx, vy, wx, wy, t, cx, cy, landed, blocked, cost, srcGate, arcGate, cellGate;
 
 freeGrid = argument0;
 nodeGrid = argument1;
-w = argument2;
-h = argument3;
+gateGrid = argument2;
+nodes = argument3;
+w = argument4;
+h = argument5;
 
 maxY = h - NAV_BOX_H;
 
@@ -69,6 +77,11 @@ with(MoveBox)
 
     if(entryNode >= 0)
     {
+        srcGate = NAV_GATE_NONE;
+        if(nodes >= 0)
+            srcGate = ds_grid_get(nodes, NAV_NODE_GATE, entryNode);
+        arcGate = NAV_GATE_NONE;
+
         vx = 0;
         vy = 0;
         wx = entryX * NAV_CELL_SIZE + NAV_CELL_SIZE / 2;
@@ -113,6 +126,15 @@ with(MoveBox)
                     break;
                 }
 
+                // Separate if, never folded into a condition beside the handle test
+                // (F40).
+                if(arcGate == NAV_GATE_NONE and gateGrid >= 0)
+                {
+                    cellGate = ds_grid_get(gateGrid, cx, cy);
+                    if(cellGate != NAV_GATE_NONE and cellGate != srcGate)
+                        arcGate = cellGate;
+                }
+
                 landed = ds_grid_get(nodeGrid, cx, cy);
                 if(landed >= 0 and landed != entryNode and vy >= 0)
                     break;
@@ -123,7 +145,9 @@ with(MoveBox)
         if(!blocked and landed >= 0)
         {
             cost = max(1, t);
-            navEdgeAdd(entryNode, landed, NAV_EDGE_MOVEBOX, 0, t, cost);
+            if(arcGate == NAV_GATE_NONE and nodes >= 0)
+                arcGate = ds_grid_get(nodes, NAV_NODE_GATE, landed);
+            navEdgeAdd(entryNode, landed, NAV_EDGE_MOVEBOX, 0, t, cost, arcGate);
         }
     }
 }

@@ -4,6 +4,7 @@
   <resource name="navToken" type="RESOURCE"/>
   <resource name="navSolidityScan" type="RESOURCE"/>
   <resource name="navSolidityBuild" type="RESOURCE"/>
+  <resource name="navGateStamp" type="RESOURCE"/>
   <resource name="navMarkInstances" type="RESOURCE"/>
   <resource name="navClearanceRows" type="RESOURCE"/>
   <resource name="navClearanceCols" type="RESOURCE"/>
@@ -22,6 +23,7 @@
   <resource name="navEdgesSortByFrom" type="RESOURCE"/>
   <resource name="navEdgeIndex" type="RESOURCE"/>
   <resource name="navCountEdgeType" type="RESOURCE"/>
+  <resource name="navGatePassable" type="RESOURCE"/>
   <resource name="navFindPath" type="RESOURCE"/>
   <resource name="navNodeFromWorld" type="RESOURCE"/>
   <resource name="navCacheSave" type="RESOURCE"/>
