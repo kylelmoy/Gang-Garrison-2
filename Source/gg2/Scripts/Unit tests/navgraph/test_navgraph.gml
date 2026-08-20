@@ -8,10 +8,14 @@
 //
 // Geometry throughout is in mask cells: 1 cell = 6 world px, and the character box is
 // NAV_BOX_W x NAV_BOX_H = 4 x 7 cells, which covers Heavy (F24).
+//
+// navNodesExtract takes -1 for the platform and lethal grids here: those come from
+// map instances rather than the walkmask, and a suite that builds bare terrain has
+// neither. The platform case below supplies its own.
 
 test_unit_begin();
 
-var solidGrid, freeGrid, nodes, edges, w, h;
+var solidGrid, freeGrid, platformGrid, lethalGrid, nodes, edges, w, h;
 var oldMap, oldMd5, oldArea;
 var path, oldNodes, oldEdges, oldCount, oldEdgeCount, oldReady, testIdx, oldIdx;
 
@@ -49,7 +53,7 @@ ds_grid_clear(solidGrid, 0);
 ds_grid_set_region(solidGrid, 0, 15, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, w, h);
 
 test_assert_equals(1, global.navNodeCount);
 test_assert_equals(8, ds_grid_get(nodes, NAV_NODE_Y, 0));
@@ -79,7 +83,7 @@ ds_grid_set_region(solidGrid, 0, 15, w - 1, h - 1, 1);
 ds_grid_set_region(solidGrid, 0, 0, w - 1, 10, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, w, h);
 
 test_assert_equals(0, global.navNodeCount);
 
@@ -103,7 +107,7 @@ ds_grid_set_region(solidGrid, 0, 16, 14, h - 1, 1);
 ds_grid_set_region(solidGrid, 15, 15, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, w, h);
 edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
 
 test_assert_equals(2, global.navNodeCount);
@@ -133,7 +137,7 @@ ds_grid_set_region(solidGrid, 0, 16, 14, h - 1, 1);
 ds_grid_set_region(solidGrid, 15, 14, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, w, h);
 edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
 
 test_assert_equals(2, global.navNodeCount);
@@ -157,7 +161,7 @@ solidGrid = ds_grid_create(w, h);
 ds_grid_clear(solidGrid, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, w, h);
 
 test_assert_equals(0, global.navNodeCount);
 
@@ -183,7 +187,7 @@ ds_grid_set_region(solidGrid, 0, 16, 14, h - 1, 1);
 ds_grid_set_region(solidGrid, 30, 16, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, w, h);
 edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
 
 test_assert_equals(2, global.navNodeCount);
@@ -206,7 +210,7 @@ ds_grid_set_region(solidGrid, 0, 16, 14, h - 1, 1);
 ds_grid_set_region(solidGrid, 45, 16, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, w, h);
 edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
 
 test_assert_equals(2, global.navNodeCount);
@@ -215,6 +219,67 @@ test_assert_equals(0, global.navEdgeCount);
 ds_grid_destroy(edges);
 ds_grid_destroy(nodes);
 ds_grid_destroy(freeGrid);
+ds_grid_destroy(solidGrid);
+
+// ---------------------------------------------------------------------------
+// A drop-through platform is standable, and can be dropped through.
+//
+// Ground at row 20, and a platform two rows thick at row 12 floating above it. The
+// platform is NOT terrain - a character jumps up through it freely - so it goes in
+// its own grid, and the surface it offers is only usable downward by holding DOWN.
+// ---------------------------------------------------------------------------
+w = 40;
+h = 32;
+solidGrid = ds_grid_create(w, h);
+ds_grid_clear(solidGrid, 0);
+ds_grid_set_region(solidGrid, 0, 20, w - 1, h - 1, 1);
+
+platformGrid = ds_grid_create(w, h);
+ds_grid_clear(platformGrid, 0);
+ds_grid_set_region(platformGrid, 10, 12, 25, 12, 1);
+
+freeGrid = navClearanceBuild(solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, platformGrid, -1, w, h);
+
+// The ground surface, plus the platform surface standing on nothing but platform.
+test_assert_equals(2, global.navNodeCount);
+
+// The platform-supported run is flagged; the ground run is not. Ordering is by y,
+// so the platform surface - higher up, smaller y - comes first.
+test_assert_equals(1, ds_grid_get(nodes, NAV_NODE_FLAGS, 0));
+test_assert_equals(0, ds_grid_get(nodes, NAV_NODE_FLAGS, 1));
+
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+test_assert_equals(1, navCountEdgeType(edges, global.navEdgeCount, NAV_EDGE_DROPTHROUGH));
+
+ds_grid_destroy(edges);
+ds_grid_destroy(nodes);
+ds_grid_destroy(freeGrid);
+ds_grid_destroy(platformGrid);
+ds_grid_destroy(solidGrid);
+
+// ---------------------------------------------------------------------------
+// A lethal volume is never offered as somewhere to stand.
+//
+// The same flat floor as the very first case, but with a killbox lying along it.
+// ---------------------------------------------------------------------------
+w = 20;
+h = 20;
+solidGrid = ds_grid_create(w, h);
+ds_grid_clear(solidGrid, 0);
+ds_grid_set_region(solidGrid, 0, 15, w - 1, h - 1, 1);
+
+lethalGrid = ds_grid_create(w, h);
+ds_grid_clear(lethalGrid, 0);
+ds_grid_set_region(lethalGrid, 0, 15, w - 1, 15, 1);
+
+freeGrid = navClearanceBuild(solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, lethalGrid, w, h);
+test_assert_equals(0, global.navNodeCount);
+
+ds_grid_destroy(nodes);
+ds_grid_destroy(freeGrid);
+ds_grid_destroy(lethalGrid);
 ds_grid_destroy(solidGrid);
 
 // ---------------------------------------------------------------------------
@@ -235,7 +300,7 @@ ds_grid_set_region(solidGrid, 15, 16, 29, h - 1, 1);
 ds_grid_set_region(solidGrid, 30, 15, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
-nodes = navNodesExtract(freeGrid, solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, w, h);
 edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
 
 global.navNodes = nodes;

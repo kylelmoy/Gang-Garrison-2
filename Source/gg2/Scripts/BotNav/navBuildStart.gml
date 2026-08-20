@@ -44,6 +44,16 @@ global.navHfree = ds_grid_create(global.navMaskW, global.navMaskH);
 ds_grid_clear(global.navHfree, 0);
 global.navFree = ds_grid_create(global.navMaskW, global.navMaskH);
 ds_grid_clear(global.navFree, 0);
+global.navPlatform = ds_grid_create(global.navMaskW, global.navMaskH);
+ds_grid_clear(global.navPlatform, 0);
+global.navLethal = ds_grid_create(global.navMaskW, global.navMaskH);
+ds_grid_clear(global.navLethal, 0);
+
+// PlayerWalls, drop-through platforms and the lethal volumes are instances rather
+// than walkmask, so they have to be stamped in separately. Doing it once here rather
+// than per band keeps it out of the chunked scan, and it is only a few dozen native
+// region writes.
+navMarkInstances(global.navSolid, global.navPlatform, global.navLethal, global.navMaskW, global.navMaskH);
 
 global.navCellGrid = -1;
 global.navRowStart = -1;

@@ -4,6 +4,7 @@
   <resource name="navToken" type="RESOURCE"/>
   <resource name="navSolidityScan" type="RESOURCE"/>
   <resource name="navSolidityBuild" type="RESOURCE"/>
+  <resource name="navMarkInstances" type="RESOURCE"/>
   <resource name="navClearanceRows" type="RESOURCE"/>
   <resource name="navClearanceCols" type="RESOURCE"/>
   <resource name="navClearanceBuild" type="RESOURCE"/>
@@ -14,6 +15,7 @@
   <resource name="navEdgeAdd" type="RESOURCE"/>
   <resource name="navWalkEdges" type="RESOURCE"/>
   <resource name="navFallEdges" type="RESOURCE"/>
+  <resource name="navDropEdges" type="RESOURCE"/>
   <resource name="navJumpEdges" type="RESOURCE"/>
   <resource name="navEdgesBuild" type="RESOURCE"/>
   <resource name="navEdgesSortByFrom" type="RESOURCE"/>

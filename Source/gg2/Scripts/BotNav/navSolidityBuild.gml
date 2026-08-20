@@ -39,6 +39,7 @@ grid = ds_grid_create(w, h);
 ds_grid_clear(grid, 0);
 
 navSolidityScan(dummy, grid, w, 0, h);
+navMarkInstances(grid, -1, -1, w, h);
 
 with(dummy)
     instance_destroy();

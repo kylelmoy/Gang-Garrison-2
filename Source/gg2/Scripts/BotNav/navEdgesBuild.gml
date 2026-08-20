@@ -27,6 +27,7 @@ if(nodeCount > 0)
 
     nodeGrid = navNodeGrid(nodes, nodeCount, w, h);
     navFallEdges(nodes, nodeCount, freeGrid, nodeGrid, w, h, 0, nodeCount);
+    navDropEdges(nodes, nodeCount, freeGrid, nodeGrid, w, h, 0, nodeCount);
 
     rowStart = navRowIndex(nodes, nodeCount, h);
     navJumpEdges(nodes, nodeCount, freeGrid, nodeGrid, rowStart, w, h, 0, nodeCount);

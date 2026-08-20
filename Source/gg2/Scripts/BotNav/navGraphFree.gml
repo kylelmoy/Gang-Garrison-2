@@ -20,6 +20,8 @@ if(!variable_global_exists("navBuildState"))
     global.navEdges = -1;
     global.navEdgeIdx = -1;
     global.navCellGrid = -1;
+    global.navPlatform = -1;
+    global.navLethal = -1;
     global.navRowStart = -1;
     global.navAccEdges = -1;
     global.navAccCount = 0;
@@ -57,6 +59,16 @@ if(global.navFree >= 0)
 {
     ds_grid_destroy(global.navFree);
     global.navFree = -1;
+}
+if(variable_global_exists("navPlatform") and global.navPlatform >= 0)
+{
+    ds_grid_destroy(global.navPlatform);
+    global.navPlatform = -1;
+}
+if(variable_global_exists("navLethal") and global.navLethal >= 0)
+{
+    ds_grid_destroy(global.navLethal);
+    global.navLethal = -1;
 }
 if(variable_global_exists("navCellGrid") and global.navCellGrid >= 0)
 {
