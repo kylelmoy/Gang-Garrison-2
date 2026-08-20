@@ -30,6 +30,15 @@
 /// exact arcs are the trajectory-fan work (F35) - but it catches jumps into ceilings,
 /// through walls, and onto surfaces that a nearer one shadows.
 ///
+/// Where the arc *starts* is a search rather than a given, and navJumpTakeoff owns both
+/// that search and the clearance walk above. Leaving from the very end of the run is the
+/// obvious choice and is wrong whenever the thing being jumped onto is also the thing
+/// that ends the run: the body is NAV_BOX_W wide and anchored at its left column, so at
+/// the end of the surface it is already flush against the obstacle and every arc is
+/// rejected on its first sample. That is not a rare corner - it is a bot trying to climb
+/// onto a crate - and on koth_valley it was the whole reason 257 of 270 nodes were
+/// unreachable from spawn.
+///
 /// gateGrid may be -1. When it is not, the arc of each edge that survives is sampled
 /// against it and the first gate crossed becomes the edge's gate code. This is the one
 /// place gates genuinely have to be arc-sampled rather than read off a node: a spawn
@@ -43,12 +52,8 @@
 
 var nodes, nodeCount, freeGrid, nodeGrid, gateGrid, rowStart, w, h, fromNode, toNode;
 var i, j, side, dir, ay, ax0, ax1, by, bx0, bx1, takeoff, xLand;
-var dCells, dWorld, tHit, vx, samples, cost, k, t, sx, sy, blocked, minRow, maxRow, ry, queue, kept;
-var srcGate, arcGate, cellGate, apex, onto, prevSy, sweepY;
-
-// Once past the apex the character is coming down, and the first surface it comes
-// down on is where the jump ends whatever the graph intended.
-apex = NAV_JUMP_V0 / NAV_JUMP_GRAVITY;
+var dCells, dWorld, tHit, vx, samples, cost, k, t, sx, sy, minRow, maxRow, ry, queue, kept;
+var srcGate, arcGate, cellGate;
 
 nodes = argument0;
 nodeCount = argument1;
@@ -76,15 +81,9 @@ for(i = fromNode; i < toNode; i += 1)
     for(side = 0; side < 2; side += 1)
     {
     if(side == 0)
-    {
         dir = -1;
-        takeoff = ax0;
-    }
     else
-    {
         dir = 1;
-        takeoff = ax1;
-    }
 
     queue = ds_priority_create();
 
@@ -116,105 +115,22 @@ for(i = fromNode; i < toNode; i += 1)
             }
 
             {
+                // Which column to leave from is a search, not a given - see
+                // navJumpTakeoff. It returns -1 when no takeoff on this surface can
+                // fly the jump at all.
+                takeoff = navJumpTakeoff(freeGrid, nodeGrid, ay, ax0, ax1,
+                                         by, bx0, bx1, dir, w, h, j);
+                if(takeoff < 0)
+                {
+                    j += 1;
+                    continue;
+                }
+
                 if(dir < 0)
-                {
                     xLand = min(bx1, takeoff - 1);
-                    if(xLand < bx0)
-                    {
-                        j += 1;
-                        continue;
-                    }
-                }
                 else
-                {
                     xLand = max(bx0, takeoff + 1);
-                    if(xLand > bx1)
-                    {
-                        j += 1;
-                        continue;
-                    }
-                }
-
                 dCells = abs(xLand - takeoff);
-                dWorld = dCells * NAV_CELL_SIZE;
-
-                // The whole flight, not just the part up to arriving overhead. Mask y
-                // grows downward, so a higher surface is a smaller row.
-                tHit = navJumpFlight(ay, by, dCells);
-                if(tHit < 0)
-                {
-                    j += 1;
-                    continue;
-                }
-                vx = dWorld / tHit;
-
-                blocked = false;
-                prevSy = ay;
-                samples = max(NAV_JUMP_SAMPLES, ceil(tHit));
-                for(k = 1; k <= samples; k += 1)
-                {
-                    t = tHit * k / samples;
-                    sx = round(takeoff + dir * (vx * t) / NAV_CELL_SIZE);
-                    sy = round(ay - (NAV_JUMP_V0 * t - NAV_JUMP_GRAVITY * t * t / 2) / NAV_CELL_SIZE);
-
-                    // Off the side of the map, or below its bottom, is a dead end.
-                    if(sx < 0 or sx > w - NAV_BOX_W or sy > h - NAV_BOX_H)
-                    {
-                        blocked = true;
-                        break;
-                    }
-
-                    // Above the top of the walkmask is open sky, not a ceiling. The
-                    // mask is the only collision geometry there is, so a row above it
-                    // cannot block anything - and rejecting these silently threw away
-                    // every jump taken from a surface within an apex of the top edge,
-                    // which is about 9.6 cells.
-                    if(sy >= 0)
-                    {
-                        if(ds_grid_get(freeGrid, sx, sy) != 1)
-                        {
-                            blocked = true;
-                            break;
-                        }
-
-                        // Clearance says the body fits here; it does not say the
-                        // character is still in the air. A cell that is some node's
-                        // anchor has ground directly under it, so on the way down
-                        // that is where this jump ends - and if it is not the surface
-                        // being aimed at, the edge is a fiction. This is what stops a
-                        // hop off a ledge being credited with the floor sixteen rows
-                        // below when there is a walkable ledge one column over (F41).
-                        //
-                        // Swept, not sampled. nodeGrid marks a node's anchor row and
-                        // nothing else, one row out of the mask, while a descending
-                        // arc covers most of a row per tick and rounds to whichever
-                        // is nearest - so a point test walks straight past the row it
-                        // was meant to catch. gg_debug's node 29 -> 44 went from
-                        // +3.2px above its row on one tick to -5.0px below it on the
-                        // next, and the platform in between was never looked at.
-                        if(t > apex and sy > prevSy)
-                        {
-                            for(sweepY = max(0, prevSy + 1); sweepY <= sy; sweepY += 1)
-                            {
-                                onto = ds_grid_get(nodeGrid, sx, sweepY);
-                                if(onto >= 0 and onto != j)
-                                {
-                                    blocked = true;
-                                    break;
-                                }
-                            }
-                            if(blocked)
-                                break;
-                        }
-                    }
-
-                    prevSy = sy;
-                }
-                if(blocked)
-                {
-                    j += 1;
-                    continue;
-                }
 
                 // Jumping is more expensive than walking the same ground, so a route
                 // that can walk will.
@@ -238,6 +154,17 @@ for(i = fromNode; i < toNode; i += 1)
         by = ds_grid_get(nodes, NAV_NODE_Y, j);
         bx0 = ds_grid_get(nodes, NAV_NODE_X0, j);
         bx1 = ds_grid_get(nodes, NAV_NODE_X1, j);
+
+        // Re-derive the winning takeoff rather than carrying it out of the candidate
+        // loop: a ds_priority holds a value and a priority and nothing else, and this
+        // runs at most NAV_JUMP_MAX_PER_SIDE times per side against a candidate loop
+        // that considered every surface in the envelope. Cheap, and it keeps one
+        // definition of what a flyable arc is.
+        takeoff = navJumpTakeoff(freeGrid, nodeGrid, ay, ax0, ax1,
+                                 by, bx0, bx1, dir, w, h, j);
+        if(takeoff < 0)
+            continue;
+
         if(dir < 0)
             xLand = min(bx1, takeoff - 1);
         else
@@ -277,7 +204,7 @@ for(i = fromNode; i < toNode; i += 1)
         // The bucket is the horizontal speed this arc actually needs, which is
         // NAV_JUMP_VX for a jump up or across and slower for a drop. A per-class
         // relaxation later wants the requirement, not the cap.
-        navEdgeAdd(i, j, NAV_EDGE_JUMP, round(vx), round(tHit), cost, arcGate);
+        navEdgeAdd(i, j, NAV_EDGE_JUMP, round(vx), round(tHit), cost, arcGate, takeoff);
         kept += 1;
     }
     ds_priority_destroy(queue);

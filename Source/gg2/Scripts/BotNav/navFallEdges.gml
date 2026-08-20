@@ -100,7 +100,7 @@ for(i = fromNode; i < toNode; i += 1)
             cost = max(1, dropped);
             if(arcGate == NAV_GATE_NONE)
                 arcGate = ds_grid_get(nodes, NAV_NODE_GATE, landed);
-            navEdgeAdd(i, landed, NAV_EDGE_FALL, 0, dropped, cost, arcGate);
+            navEdgeAdd(i, landed, NAV_EDGE_FALL, 0, dropped, cost, arcGate, -1);
         }
     }
 }

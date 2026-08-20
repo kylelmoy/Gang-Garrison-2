@@ -21,6 +21,7 @@ var solidGrid, freeGrid, platformGrid, lethalGrid, doorGrid, gateGrid, nodeGrid,
 var oldMap, oldMd5, oldArea, oldSetup, gateInst, gl, gt, gr, gb;
 var path, oldNodes, oldEdges, oldCount, oldEdgeCount, oldReady, testIdx, oldIdx;
 var ei, hasUpperToBlock, hasUpperToFloor;
+var groundNode, crateNode, gx0, gx1, cx0, cx1, takeoffCol, hasClimb;
 
 // This suite may run against a server with a live nav graph. navNodesExtract and
 // navEdgesBuild both report their results through globals, so every case below
@@ -253,6 +254,90 @@ test_assert_equals(-1, navJumpFlight(0, 1, 40));
 
 // Level and beyond NAV_JUMP_MAX_TICKS.
 test_assert_equals(-1, navJumpFlight(10, 10, 50));
+
+// ---------------------------------------------------------------------------
+// Climbing onto a crate: the takeoff column is a search, not the end of the run.
+//
+// This is koth_valley's geometry, shrunk. Flat ground, and standing on it an 8-cell
+// wide, 8-row tall crate whose top is its own surface. A character is NAV_BOX_W cells
+// wide and anchored at its left column, so at the last anchor before the crate its
+// body is flush against it - and from there no arc onto the crate clears, whichever
+// column it aims at. Stepping the takeoff a few cells back makes the identical jump
+// fine.
+//
+// The bug this pins down cost koth_valley 257 of its 270 nodes: bots could not leave
+// the spawn valley at all, because the first obstacle past spawn was exactly this
+// shape. It also survived one investigation that varied the landing column instead of
+// the takeoff and concluded the geometry was simply impassable.
+// ---------------------------------------------------------------------------
+w = 40;
+h = 40;
+solidGrid = ds_grid_create(w, h);
+ds_grid_clear(solidGrid, 0);
+ds_grid_set_region(solidGrid, 0, 25, w - 1, h - 1, 1);   // ground, top at row 25
+ds_grid_set_region(solidGrid, 20, 17, 27, 24, 1);        // crate, top at row 17
+
+freeGrid = navClearanceBuild(solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
+
+// The ground left of the crate, and the crate's top. Anchor rows are the surface row
+// minus NAV_BOX_H: 25 - 7 = 18 for the ground, 17 - 7 = 10 for the crate.
+groundNode = -1;
+crateNode = -1;
+for(ei = 0; ei < global.navNodeCount; ei += 1)
+{
+    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 18 and ds_grid_get(nodes, NAV_NODE_X0, ei) == 0)
+        groundNode = ei;
+    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 10)
+        crateNode = ei;
+}
+test_assert_equals(true, groundNode >= 0);
+test_assert_equals(true, crateNode >= 0);
+
+// The ground run ends flush against the crate: at its last anchor the body's right
+// edge is the column immediately before the crate's leftmost, so there is nowhere left
+// to stand and no room to rise.
+gx0 = ds_grid_get(nodes, NAV_NODE_X0, groundNode);
+gx1 = ds_grid_get(nodes, NAV_NODE_X1, groundNode);
+cx0 = ds_grid_get(nodes, NAV_NODE_X0, crateNode);
+cx1 = ds_grid_get(nodes, NAV_NODE_X1, crateNode);
+test_assert_equals(20, gx1 + NAV_BOX_W);
+
+// The end of the run cannot fly it - that is the whole finding, so assert it directly
+// rather than only asserting the fix. navJumpTakeoff is handed a source span of one
+// column, pinned to the run's end, which is exactly what the old code always used.
+nodeGrid = navNodeGrid(nodes, global.navNodeCount, w, h);
+test_assert_equals(-1, navJumpTakeoff(freeGrid, nodeGrid, 18, gx1, gx1,
+                                      10, cx0, cx1, 1, w, h, crateNode));
+
+// Given the whole run to choose from, it finds one that does - and it is genuinely a
+// few cells back from the end, not the end itself.
+takeoffCol = navJumpTakeoff(freeGrid, nodeGrid, 18, gx0, gx1,
+                            10, cx0, cx1, 1, w, h, crateNode);
+test_assert_equals(true, takeoffCol >= 0);
+test_assert_equals(true, takeoffCol < gx1);
+
+// And the edge generator emits the edge, carrying that takeoff column on it so the
+// follower jumps from where the build proved it could rather than from the run's end.
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
+
+hasClimb = false;
+for(ei = 0; ei < global.navEdgeCount; ei += 1)
+{
+    if(ds_grid_get(edges, NAV_EDGE_FROM, ei) == groundNode
+       and ds_grid_get(edges, NAV_EDGE_TO, ei) == crateNode)
+    {
+        hasClimb = true;
+        test_assert_equals(takeoffCol, ds_grid_get(edges, NAV_EDGE_TAKEOFF, ei));
+    }
+}
+test_assert_equals(true, hasClimb);
+
+ds_grid_destroy(edges);
+ds_grid_destroy(nodeGrid);
+ds_grid_destroy(nodes);
+ds_grid_destroy(freeGrid);
+ds_grid_destroy(solidGrid);
 
 // ---------------------------------------------------------------------------
 // A surface far below is not reachable just because it is under the takeoff.

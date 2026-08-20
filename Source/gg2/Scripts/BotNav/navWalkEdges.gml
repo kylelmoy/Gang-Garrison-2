@@ -66,8 +66,8 @@ for(i = 0; i < nodeCount; i += 1)
             midA = (ax0 + ax1) / 2;
             midB = (bx0 + bx1) / 2;
             cost = max(1, abs(midA - midB));
-            navEdgeAdd(i, j, NAV_EDGE_WALK, 0, 0, cost, ds_grid_get(nodes, NAV_NODE_GATE, j));
-            navEdgeAdd(j, i, NAV_EDGE_WALK, 0, 0, cost, ds_grid_get(nodes, NAV_NODE_GATE, i));
+            navEdgeAdd(i, j, NAV_EDGE_WALK, 0, 0, cost, ds_grid_get(nodes, NAV_NODE_GATE, j), -1);
+            navEdgeAdd(j, i, NAV_EDGE_WALK, 0, 0, cost, ds_grid_get(nodes, NAV_NODE_GATE, i), -1);
         }
 
         j += 1;
@@ -93,9 +93,9 @@ for(i = 0; i < nodeCount - 1; i += 1)
 
     // i -> i+1 crosses rightward; i+1 -> i crosses leftward.
     if(doorA != NAV_DOOR_RIGHT and doorB != NAV_DOOR_RIGHT)
-        navEdgeAdd(i, i + 1, NAV_EDGE_WALK, 0, 0, 1, gateB);
+        navEdgeAdd(i, i + 1, NAV_EDGE_WALK, 0, 0, 1, gateB, -1);
     if(doorA != NAV_DOOR_LEFT and doorB != NAV_DOOR_LEFT)
-        navEdgeAdd(i + 1, i, NAV_EDGE_WALK, 0, 0, 1, gateA);
+        navEdgeAdd(i + 1, i, NAV_EDGE_WALK, 0, 0, 1, gateA, -1);
 }
 
 ds_grid_destroy(rowStart);

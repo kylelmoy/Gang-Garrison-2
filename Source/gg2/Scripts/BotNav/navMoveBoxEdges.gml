@@ -147,7 +147,7 @@ with(MoveBox)
             cost = max(1, t);
             if(arcGate == NAV_GATE_NONE and nodes >= 0)
                 arcGate = ds_grid_get(nodes, NAV_NODE_GATE, landed);
-            navEdgeAdd(entryNode, landed, NAV_EDGE_MOVEBOX, 0, t, cost, arcGate);
+            navEdgeAdd(entryNode, landed, NAV_EDGE_MOVEBOX, 0, t, cost, arcGate, -1);
         }
     }
 }

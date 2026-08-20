@@ -252,12 +252,20 @@ else if(edgeType == NAV_EDGE_FALL)
 }
 else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
 {
-    // navJumpEdges takes off from the end of the run facing the landing, at full
-    // horizontal speed, so walk to that end first and jump on arrival.
-    if(dirToNext >= 0)
-        takeoffCol = c1;
-    else
-        takeoffCol = c0;
+    // The takeoff column is carried on the edge, because navJumpTakeoff searched for
+    // it rather than assuming it. It is usually the end of the run facing the landing,
+    // but where the landing surface is also what ends the run - climbing onto a crate -
+    // the body is flush against it there and the only flyable arcs start a few cells
+    // back. Re-deriving c1/c0 here would jump from a column the build already rejected
+    // and quietly turn those edges back into fictions.
+    takeoffCol = ds_grid_get(global.navEdges, NAV_EDGE_TAKEOFF, edgeRow);
+    if(takeoffCol < 0)
+    {
+        if(dirToNext >= 0)
+            takeoffCol = c1;
+        else
+            takeoffCol = c0;
+    }
 
     if(char.onground)
     {
