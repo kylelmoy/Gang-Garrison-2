@@ -12,7 +12,7 @@
 ///
 /// The caller owns the returned grid and must ds_grid_destroy it.
 
-var nodes, nodeCount, freeGrid, w, h, nodeGrid, sorted;
+var nodes, nodeCount, freeGrid, w, h, nodeGrid, rowStart, sorted;
 nodes = argument0;
 nodeCount = argument1;
 freeGrid = argument2;
@@ -27,6 +27,11 @@ if(nodeCount > 0)
 
     nodeGrid = navNodeGrid(nodes, nodeCount, w, h);
     navFallEdges(nodes, nodeCount, freeGrid, nodeGrid, w, h, 0, nodeCount);
+
+    rowStart = navRowIndex(nodes, nodeCount, h);
+    navJumpEdges(nodes, nodeCount, freeGrid, nodeGrid, rowStart, w, h, 0, nodeCount);
+    ds_grid_destroy(rowStart);
+
     ds_grid_destroy(nodeGrid);
 }
 

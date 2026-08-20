@@ -19,6 +19,10 @@ if(!variable_global_exists("navBuildState"))
     global.navNodes = -1;
     global.navEdges = -1;
     global.navEdgeIdx = -1;
+    global.navCellGrid = -1;
+    global.navRowStart = -1;
+    global.navAccEdges = -1;
+    global.navAccCount = 0;
     global.navSolid = -1;
     global.navHfree = -1;
     global.navFree = -1;
@@ -53,6 +57,24 @@ if(global.navFree >= 0)
 {
     ds_grid_destroy(global.navFree);
     global.navFree = -1;
+}
+if(variable_global_exists("navCellGrid") and global.navCellGrid >= 0)
+{
+    ds_grid_destroy(global.navCellGrid);
+    global.navCellGrid = -1;
+}
+if(variable_global_exists("navRowStart") and global.navRowStart >= 0)
+{
+    ds_grid_destroy(global.navRowStart);
+    global.navRowStart = -1;
+}
+// An abandoned build leaves the edge accumulator open; it is not part of the graph
+// but it is just as much a leak.
+if(variable_global_exists("navAccEdges") and global.navAccEdges >= 0)
+{
+    ds_grid_destroy(global.navAccEdges);
+    global.navAccEdges = -1;
+    global.navAccCount = 0;
 }
 if(global.navNodes >= 0)
 {

@@ -14,6 +14,7 @@
   <resource name="navEdgeAdd" type="RESOURCE"/>
   <resource name="navWalkEdges" type="RESOURCE"/>
   <resource name="navFallEdges" type="RESOURCE"/>
+  <resource name="navJumpEdges" type="RESOURCE"/>
   <resource name="navEdgesBuild" type="RESOURCE"/>
   <resource name="navEdgesSortByFrom" type="RESOURCE"/>
   <resource name="navEdgeIndex" type="RESOURCE"/>

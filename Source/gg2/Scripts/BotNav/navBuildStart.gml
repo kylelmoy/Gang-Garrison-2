@@ -45,6 +45,8 @@ ds_grid_clear(global.navHfree, 0);
 global.navFree = ds_grid_create(global.navMaskW, global.navMaskH);
 ds_grid_clear(global.navFree, 0);
 
+global.navCellGrid = -1;
+global.navRowStart = -1;
 global.navCursor = 0;
 global.navBuildState = NAV_BUILD_SCAN;
 global.navReady = false;

@@ -63,22 +63,81 @@ if(global.navBuildState == NAV_BUILD_FREE)
     if(global.navCursor >= global.navMaskW)
     {
         global.navCursor = 0;
+        global.navBuildState = NAV_BUILD_NODES;
+    }
+    return false;
+}
+
+// Node extraction is cheap - well under a millisecond even on cp_dirtbowl - so it
+// finishes in one tick. Edge generation is not: jump edges alone are about a
+// millisecond per node, which put ~845ms into a single frame when this stage did
+// everything at once. That is a 25 frame stall on a live server, exactly what the
+// chunking exists to avoid, so fall and jump run a slice of nodes at a time.
+if(global.navBuildState == NAV_BUILD_NODES)
+{
+    global.navNodes = navNodesExtract(global.navFree, global.navSolid, global.navMaskW, global.navMaskH);
+    global.navCellGrid = navNodeGrid(global.navNodes, global.navNodeCount, global.navMaskW, global.navMaskH);
+    global.navRowStart = navRowIndex(global.navNodes, global.navNodeCount, global.navMaskH);
+
+    navEdgesBegin();
+    global.navCursor = 0;
+    global.navBuildState = NAV_BUILD_WALK;
+    return false;
+}
+
+if(global.navBuildState == NAV_BUILD_WALK)
+{
+    navWalkEdges(global.navNodes, global.navNodeCount, global.navMaskH);
+    global.navCursor = 0;
+    global.navBuildState = NAV_BUILD_FALL;
+    return false;
+}
+
+if(global.navBuildState == NAV_BUILD_FALL)
+{
+    endAt = min(global.navNodeCount, global.navCursor + NAV_BUILD_EDGE_NODES * 4);
+    navFallEdges(global.navNodes, global.navNodeCount, global.navFree, global.navCellGrid,
+                 global.navMaskW, global.navMaskH, global.navCursor, endAt);
+    global.navCursor = endAt;
+
+    if(global.navCursor >= global.navNodeCount)
+    {
+        global.navCursor = 0;
+        global.navBuildState = NAV_BUILD_JUMP;
+    }
+    return false;
+}
+
+if(global.navBuildState == NAV_BUILD_JUMP)
+{
+    endAt = min(global.navNodeCount, global.navCursor + NAV_BUILD_EDGE_NODES);
+    navJumpEdges(global.navNodes, global.navNodeCount, global.navFree, global.navCellGrid,
+                 global.navRowStart, global.navMaskW, global.navMaskH, global.navCursor, endAt);
+    global.navCursor = endAt;
+
+    if(global.navCursor >= global.navNodeCount)
+    {
+        global.navCursor = 0;
         global.navBuildState = NAV_BUILD_FINISH;
     }
     return false;
 }
 
-// Node extraction and walk edges are both far cheaper than a clearance band - they
-// measured at under a millisecond on gg_debug - so they finish in one tick rather
-// than earning a chunked stage of their own.
 if(global.navBuildState == NAV_BUILD_FINISH)
 {
-    global.navNodes = navNodesExtract(global.navFree, global.navSolid, global.navMaskW, global.navMaskH);
-    global.navEdges = navEdgesBuild(global.navNodes, global.navNodeCount, global.navFree, global.navMaskW, global.navMaskH);
+    ds_grid_resize(global.navAccEdges, NAV_EDGE_FIELDS, max(global.navAccCount, 1));
+    global.navEdges = navEdgesSortByFrom(global.navAccEdges, global.navAccCount, global.navNodeCount);
+    ds_grid_destroy(global.navAccEdges);
+    global.navAccEdges = -1;
+    global.navAccCount = 0;
 
     global.navEdgeIdx = navEdgeIndex(global.navEdges, global.navEdgeCount, global.navNodeCount);
 
     // The scaffolding is much larger than the graph and trivially rederivable.
+    ds_grid_destroy(global.navRowStart);
+    global.navRowStart = -1;
+    ds_grid_destroy(global.navCellGrid);
+    global.navCellGrid = -1;
     ds_grid_destroy(global.navHfree);
     global.navHfree = -1;
     ds_grid_destroy(global.navFree);

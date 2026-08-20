@@ -166,6 +166,58 @@ ds_grid_destroy(freeGrid);
 ds_grid_destroy(solidGrid);
 
 // ---------------------------------------------------------------------------
+// A gap inside the jump envelope gets jump edges both ways; one beyond it gets none.
+//
+// Two platforms at the same height either side of a bottomless pit, so nothing can
+// walk across and nothing can fall to a landing - any connection has to be a jump.
+//
+// The envelope is GG2's own: v0 8.3 against gravity 0.6 gives a flat jump of about
+// 27.7 ticks, and at Heavy's 4.53 px/tick that is roughly 125 world px, or 20 cells.
+// 13 cells apart is comfortably inside it; 28 cells is comfortably outside.
+// ---------------------------------------------------------------------------
+w = 60;
+h = 24;
+solidGrid = ds_grid_create(w, h);
+ds_grid_clear(solidGrid, 0);
+ds_grid_set_region(solidGrid, 0, 16, 14, h - 1, 1);
+ds_grid_set_region(solidGrid, 30, 16, w - 1, h - 1, 1);
+
+freeGrid = navClearanceBuild(solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+
+test_assert_equals(2, global.navNodeCount);
+test_assert_equals(0, navCountEdgeType(edges, global.navEdgeCount, NAV_EDGE_WALK));
+// The pit has no floor, so there is nothing to fall onto either.
+test_assert_equals(0, navCountEdgeType(edges, global.navEdgeCount, NAV_EDGE_FALL));
+test_assert_equals(2, navCountEdgeType(edges, global.navEdgeCount, NAV_EDGE_JUMP));
+
+ds_grid_destroy(edges);
+ds_grid_destroy(nodes);
+ds_grid_destroy(freeGrid);
+ds_grid_destroy(solidGrid);
+
+// The same map with the far platform pushed out past the envelope.
+w = 80;
+h = 24;
+solidGrid = ds_grid_create(w, h);
+ds_grid_clear(solidGrid, 0);
+ds_grid_set_region(solidGrid, 0, 16, 14, h - 1, 1);
+ds_grid_set_region(solidGrid, 45, 16, w - 1, h - 1, 1);
+
+freeGrid = navClearanceBuild(solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+
+test_assert_equals(2, global.navNodeCount);
+test_assert_equals(0, global.navEdgeCount);
+
+ds_grid_destroy(edges);
+ds_grid_destroy(nodes);
+ds_grid_destroy(freeGrid);
+ds_grid_destroy(solidGrid);
+
+// ---------------------------------------------------------------------------
 // A* over the built graph.
 //
 // Three stepped platforms, each one cell above the next, so the whole thing is walk
