@@ -202,4 +202,13 @@
   <constant name="NAV_JUMP_SAMPLES" value="10"/>
   <constant name="NAV_JUMP_PENALTY" value="6"/>
   <constant name="NAV_JUMP_MAX_PER_SIDE" value="3"/>
+  <constant name="BOT_REPLAN_TICKS" value="45"/>
+  <constant name="BOT_STUCK_TICKS" value="12"/>
+  <constant name="BOT_OFFPATH_TICKS" value="20"/>
+  <constant name="BOT_BLACKLIST_TICKS" value="150"/>
+  <constant name="BOT_THRASH_DIST" value="8"/>
+  <constant name="BOT_ARRIVE_TOL" value="8"/>
+  <constant name="BOT_STEER_TOL" value="2"/>
+  <constant name="BOT_ENTRY_LEAD" value="2"/>
+  <constant name="BOT_JUMP_LEAD" value="1"/>
 </constants>

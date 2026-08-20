@@ -6,5 +6,11 @@
   <resource name="botReteamAll" type="RESOURCE"/>
   <resource name="botPopulationUpdate" type="RESOURCE"/>
   <resource name="botFindTarget" type="RESOURCE"/>
+  <resource name="botPathFree" type="RESOURCE"/>
+  <resource name="botNavRelease" type="RESOURCE"/>
+  <resource name="botSetGoal" type="RESOURCE"/>
+  <resource name="botBlacklistEdge" type="RESOURCE"/>
+  <resource name="botPathPlan" type="RESOURCE"/>
+  <resource name="botPathKeys" type="RESOURCE"/>
   <resource name="botInputUpdate" type="RESOURCE"/>
 </resources>

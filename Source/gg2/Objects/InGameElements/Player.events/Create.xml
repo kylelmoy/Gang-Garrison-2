@@ -24,6 +24,37 @@
     botRemovalPending = false;
     botRemovalDeadline = 0;
     
+    // Bot navigation state (milestone 5). All of it lives on the Player rather than on
+    // the Character so that it survives a death: the goal and the anti-thrash blacklist
+    // are about the bot, not about the body it happens to be wearing. botPath and
+    // botBlacklist own ds_ structures - botNavRelease is what gives them back.
+    botPath = -1;
+    botPathAt = 0;
+    botGoalX = 0;
+    botGoalY = 0;
+    botGoalNode = -1;
+    botHasGoal = false;
+    botArrived = false;
+    botReplanAt = 0;
+    botEdgeFrom = -1;
+    botEdgeTo = -1;
+    botOffPathTicks = 0;
+    botStuckTicks = 0;
+    botLastX = 0;
+    botLastY = 0;
+    botJumpHeld = false;
+    botBlacklist = -1;
+    botBlacklistQ = -1;
+    botLastReplanX = -100000;
+    botLastReplanY = -100000;
+    botReplanNear = 0;
+    botAttackKeys = 0;
+    // Diagnostics, so that "the stuck detector and the blacklist both fire" is a thing
+    // that can be read off a running server rather than inferred from behaviour.
+    botReplans = 0;
+    botStuckFires = 0;
+    botBlacklistFires = 0;
+    
     // client setting stuff; set to defaults
     queueJump = false;
     

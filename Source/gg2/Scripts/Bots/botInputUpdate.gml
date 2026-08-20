@@ -3,18 +3,33 @@
 /// processClientCommands.gml - but a bot has no socket to read a command from, so this
 /// writes keyState/aimDirection onto its Character directly.
 ///
-/// Aim/target only re-evaluate every decisionPeriod ticks, staggered per bot, so aim
-/// visibly snaps rather than tracking continuously. event_user(1) still fires every tick
-/// so pressedKeys/releasedKeys edge detection keeps working correctly in between.
+/// Two cadences, deliberately different. Aim and target re-evaluate only every
+/// decisionPeriod ticks, staggered per bot, so aim visibly snaps rather than tracking
+/// continuously - that is the whole difficulty knob until milestone 6 builds a real
+/// one. Movement re-decides every single tick: a missed jump window is a bot standing
+/// at the edge of a gap forever, and there is nothing human-looking about that.
+///
+/// The two halves are ORed into one keyState. They cannot conflict - one owns ATTACK,
+/// the other LEFT/RIGHT/JUMP/DOWN - so the bot shoots while it walks, exactly as a
+/// player does.
+///
+/// event_user(1) still fires every tick regardless, so pressedKeys/releasedKeys edge
+/// detection keeps working in between decisions (F3). The path follower depends on it:
+/// Character jumps on the rising edge of $80, not on the bit being held.
 
-var player, char, decisionPeriod, tick;
+var player, char, decisionPeriod, tick, navKeys;
 player = argument0;
 char = player.object;
 if(char == -1)
+{
+    botPathFree(player);
     exit;
+}
 
 decisionPeriod = 15;
 tick = frame;
+
+navKeys = botPathKeys(player);
 
 with(char)
 {
@@ -27,11 +42,13 @@ with(char)
         {
             aimDirection = point_direction(x, y, target.x, target.y);
             netAimDirection = aimDirection*65536/360;
-            keyState = KEY_ATTACK;
+            player.botAttackKeys = KEY_ATTACK;
         }
         else
-            keyState = 0;
+            player.botAttackKeys = 0;
     }
+
+    keyState = player.botAttackKeys | navKeys;
 
     event_user(1);
 }

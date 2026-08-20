@@ -477,7 +477,7 @@ global.navReady = true;
 // Three surfaces, and every one reachable from every other.
 test_assert_equals(3, global.navNodeCount);
 
-path = navFindPath(0, 2, TEAM_RED, false);
+path = navFindPath(0, 2, TEAM_RED, false, -1);
 test_assert_equals(true, path >= 0);
 test_assert_equals(3, ds_list_size(path));
 test_assert_equals(0, ds_list_find_value(path, 0));
@@ -485,13 +485,13 @@ test_assert_equals(2, ds_list_find_value(path, 2));
 ds_list_destroy(path);
 
 // A path to itself is one node, not zero and not a loop.
-path = navFindPath(1, 1, TEAM_RED, false);
+path = navFindPath(1, 1, TEAM_RED, false, -1);
 test_assert_equals(1, ds_list_size(path));
 ds_list_destroy(path);
 
 // Out of range asks are refused rather than clamped.
-test_assert_equals(-1, navFindPath(0, 99, TEAM_RED, false));
-test_assert_equals(-1, navFindPath(-1, 0, TEAM_RED, false));
+test_assert_equals(-1, navFindPath(0, 99, TEAM_RED, false, -1));
+test_assert_equals(-1, navFindPath(-1, 0, TEAM_RED, false, -1));
 
 global.navReady = false;
 global.navEdgeIdx = oldIdx;
@@ -604,7 +604,7 @@ global.navEdgeIdx = testIdx;
 global.navReady = true;
 
 // A red bot walks its own gate: floor, gate, floor.
-path = navFindPath(0, 2, TEAM_RED, false);
+path = navFindPath(0, 2, TEAM_RED, false, -1);
 test_assert_equals(true, path >= 0);
 test_assert_equals(3, ds_list_size(path));
 test_assert_equals(1, ds_list_find_value(path, 1));
@@ -612,13 +612,13 @@ ds_list_destroy(path);
 
 // The same bot carrying the intel may not take its own gate out, and there is no way
 // round on this map.
-test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, true));
+test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, true, -1));
 
 // Neither may a blue bot - including by the jump that hops the gate node.
-test_assert_equals(-1, navFindPath(0, 2, TEAM_BLUE, false));
+test_assert_equals(-1, navFindPath(0, 2, TEAM_BLUE, false, -1));
 
 // But a blue bot that somehow starts inside the gate can still get out of it.
-path = navFindPath(1, 2, TEAM_BLUE, false);
+path = navFindPath(1, 2, TEAM_BLUE, false, -1);
 test_assert_equals(true, path >= 0);
 test_assert_equals(2, ds_list_size(path));
 ds_list_destroy(path);

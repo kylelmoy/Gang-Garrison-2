@@ -1,4 +1,4 @@
-/// navFindPath(startNode, goalNode, team, hasIntel)
+/// navFindPath(startNode, goalNode, team, hasIntel, blocked)
 /// A* over the built nav graph, for a character of `team` carrying the intel or not.
 /// Returns a ds_list of node indices from startNode to goalNode inclusive, or -1 if
 /// the goal is unreachable or the graph is not ready. The caller owns the returned
@@ -10,6 +10,13 @@
 /// here, per query, by navGatePassable. The effect is that a blue bot's search simply
 /// cannot expand through a red spawn gate, so it routes the long way round rather than
 /// walking into a wall, and the same graph still serves the red bots going through it.
+///
+/// `blocked` is a ds_map of navEdgeKey values to skip, or -1 for none - a caller's
+/// private list of edges it has already tried and failed to traverse. It is the
+/// anti-thrash half of the path follower (F35): without it a bot that wedges in a
+/// doorway re-plans, gets handed the same route it just failed, and wedges again
+/// forever. Keeping it out of the graph keeps it per bot, which it has to be, and
+/// keeping it a ds_map rather than a cost multiplier keeps the heuristic admissible.
 ///
 /// The test is on the edge rather than on the node it arrives at, because an arc can
 /// cross a gate without landing on it (see navEdgeAdd). It also falls out of that that
@@ -34,7 +41,7 @@
 /// least the straight-line distance they cover vertically, so they do not break it
 /// either.
 
-var startNode, goalNode, team, hasIntel, openSet, gScore, cameFrom, closed;
+var startNode, goalNode, team, hasIntel, blocked, openSet, gScore, cameFrom, closed;
 var current, nb, e, eStart, eCount, i, tentative, path, guard;
 var gx, gy, cx, cy, nx, ny;
 
@@ -42,6 +49,7 @@ startNode = argument0;
 goalNode = argument1;
 team = argument2;
 hasIntel = argument3;
+blocked = argument4;
 
 if(!global.navReady)
     return -1;
@@ -102,6 +110,15 @@ while(!ds_priority_empty(openSet))
             continue;
         if(!navGatePassable(ds_grid_get(global.navEdges, NAV_EDGE_GATE, i), team, hasIntel))
             continue;
+
+        // Its own if, never folded in beside the handle test: GM8 evaluates both sides
+        // of and/or unconditionally, so an inline "blocked < 0 or ds_map_exists(...)"
+        // calls ds_map_exists on -1 for every caller without a blacklist (F40).
+        if(blocked >= 0)
+        {
+            if(ds_map_exists(blocked, navEdgeKey(current, nb)))
+                continue;
+        }
 
         tentative = ds_grid_get(gScore, 0, current) + ds_grid_get(global.navEdges, NAV_EDGE_COST, i);
         e = ds_grid_get(gScore, 0, nb);

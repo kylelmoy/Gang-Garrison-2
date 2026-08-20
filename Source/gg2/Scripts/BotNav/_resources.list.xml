@@ -9,6 +9,9 @@
   <resource name="navClearanceRows" type="RESOURCE"/>
   <resource name="navClearanceCols" type="RESOURCE"/>
   <resource name="navClearanceBuild" type="RESOURCE"/>
+  <resource name="navAnchorCol" type="RESOURCE"/>
+  <resource name="navColWorldX" type="RESOURCE"/>
+  <resource name="navEdgeKey" type="RESOURCE"/>
   <resource name="navNodesExtract" type="RESOURCE"/>
   <resource name="navRowIndex" type="RESOURCE"/>
   <resource name="navNodeGrid" type="RESOURCE"/>
@@ -24,6 +27,7 @@
   <resource name="navEdgeIndex" type="RESOURCE"/>
   <resource name="navCountEdgeType" type="RESOURCE"/>
   <resource name="navGatePassable" type="RESOURCE"/>
+  <resource name="navEdgeFind" type="RESOURCE"/>
   <resource name="navFindPath" type="RESOURCE"/>
   <resource name="navNodeFromWorld" type="RESOURCE"/>
   <resource name="navCacheSave" type="RESOURCE"/>
