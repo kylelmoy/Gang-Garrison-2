@@ -65,6 +65,21 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
 - **A whole-map nav build is seconds of blocking work** — fine in the map editor, not fine as a
   blocking loop on a live server. Chunk it across frames from an alarm, and cache the built graph
   to disk keyed by map MD5 so the expensive path runs once per map ever.
+- **Where a jump takes off from is a search, not the end of the run.** A character is 4 mask cells
+  wide and anchored at its *left* column, so standing at the very end of a surface puts its body
+  flush against whatever ends that surface. If that is also the thing being jumped onto — a crate, a
+  step, a ledge — the body already occupies the landing's columns at floor level and every arc is
+  rejected on its first sample, whichever column it aims at. Stepping the takeoff a few cells back
+  makes the identical jump fine. This one cost `koth_valley` 257 of its 270 nav nodes, and survived
+  an investigation that varied the *landing* column instead and concluded the geometry was
+  impassable. When an arc fails, check where it was rejected before theorising about what it was
+  aiming at.
+- **A jump edge has to be flown at the speed it was validated at.** The generator records a
+  per-arc horizontal speed, and for a steep climb that is 1–3 px/tick because the arc spends most of
+  its time going up. A character holding a direction key reaches nearly ten, so a follower that
+  simply holds the key sails past the landing and the graph's promise about where it ends up means
+  nothing. Governing this needs both halves: stop pressing in the air *and* brake before the jump,
+  because with no key held the engine bleeds only ~13% of horizontal speed per tick.
 - **A jump arc has to be simulated all the way to where the character lands, not to where it is
   first horizontally over its target.** Those are the same moment when jumping up onto a ledge and
   wildly different when dropping down onto a floor, where "over it, and above it" is true on the
