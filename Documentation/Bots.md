@@ -65,29 +65,58 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
 - **A whole-map nav build is seconds of blocking work** — fine in the map editor, not fine as a
   blocking loop on a live server. Chunk it across frames from an alarm, and cache the built graph
   to disk keyed by map MD5 so the expensive path runs once per map ever.
-- **Where a jump takes off from is a search, not the end of the run.** A character is 4 mask cells
-  wide and anchored at its *left* column, so standing at the very end of a surface puts its body
-  flush against whatever ends that surface. If that is also the thing being jumped onto — a crate, a
-  step, a ledge — the body already occupies the landing's columns at floor level and every arc is
-  rejected on its first sample, whichever column it aims at. Stepping the takeoff a few cells back
-  makes the identical jump fine. This one cost `koth_valley` 257 of its 270 nav nodes, and survived
-  an investigation that varied the *landing* column instead and concluded the geometry was
-  impassable. When an arc fails, check where it was rejected before theorising about what it was
-  aiming at.
-- **A jump edge has to be flown at the speed it was validated at.** The generator records a
-  per-arc horizontal speed, and for a steep climb that is 1–3 px/tick because the arc spends most of
-  its time going up. A character holding a direction key reaches nearly ten, so a follower that
-  simply holds the key sails past the landing and the graph's promise about where it ends up means
-  nothing. Governing this needs both halves: stop pressing in the air *and* brake before the jump,
-  because with no key held the engine bleeds only ~13% of horizontal speed per tick.
-- **A jump arc has to be simulated all the way to where the character lands, not to where it is
-  first horizontally over its target.** Those are the same moment when jumping up onto a ledge and
-  wildly different when dropping down onto a floor, where "over it, and above it" is true on the
-  first tick of the jump. Stopping there credits a ledge with every surface below it regardless of
-  what is in between, and because those edges look cheap they crowd the real ones out of the
-  per-side keep limit. `navJumpFlight` is where the two cases are separated; the descending half of
-  the arc must also be checked against the node grid, *swept* over the rows it crosses rather than
-  point-sampled, because a node occupies one row of the mask and a falling arc rounds past it.
+- **Where a jump takes off from is a search, and what rules a takeoff out is what is above it.**
+  Every jump in GG2 rises until something stops it, so a low ceiling over the end of a run shortens
+  every arc that starts there, and one low enough leaves no arc that reaches the target at all —
+  while two cells along there is headroom and the same jump is clean. Nothing about where the arc
+  aims can fix that, which is what makes it a search over takeoffs. *(This search was originally
+  added for a different case — a body flush against a crate it is trying to climb — which turned
+  out to be an artefact of the arcs being far too fast, and went away when the flight model was
+  fixed. Stepping back from a crate is actively counter-productive: the same landing from further
+  away is a faster arc, and faster is what fails. When an arc fails, check **where** it was
+  rejected before theorising about what it was aiming at.)*
+- **A jump edge is flown as a trajectory, not as a speed.** The generator validated one specific
+  arc, and every cell it checked for clearance is about that arc: the follower's job in the air is
+  to be where the plan says it should be by *this* tick, pressing when it is behind and braking when
+  it is ahead. Holding the arc's speed instead sounds equivalent and is not — a bot leaves the
+  ground from a standstill and spends four or five ticks reaching a slow arc's speed, which is most
+  of a cell of ground it can never make back, and any nudge in the air is permanent. Measured over
+  every class, rise, ledge width and run-up, landing on the intended node went from 12–19% to 100%.
+  Two details this depends on: the speed and duration are recorded **unrounded** (rounding
+  0.54px/tick to 1 moves the landing two cells), and the elapsed ticks are counted rather than read
+  off `vspeed`, which pins at 10 once a fall reaches terminal velocity and then reports every later
+  tick as the same one.
+- **A jump ends where the arc comes back down, and nowhere else.** GG2's jump is a fixed impulse:
+  there is no short jump and no variable jump height, so the flight time is a function of the rise
+  alone and the horizontal distance is only a constraint on the speed. Both of the plausible
+  shortcuts are wrong, and both have shipped here. "When the character is first horizontally over
+  the target" is true on the first tick of a drop, which credits a ledge with every surface below
+  it. "When it first draws level with the target" is true seventeen ticks before a steep climb
+  lands, which makes the arc fast enough to sail over an 18px ledge by four cells. Both make the
+  bogus edges look *cheap*, so they also crowd the real ones out of the per-side keep limit. The
+  descending half of the arc must be checked against the node grid, **swept** over the rows it
+  crosses rather than point-sampled, because a node occupies one row of the mask and a falling arc
+  rounds past it.
+- **Hitting your head is a kind of jump, not a failed one.** A ceiling zeroes `vspeed` and the
+  character comes down from there, landing exactly where a shorter arc lands. Refusing to model that
+  throws away every climb under an overhang — on `koth_valley` it left the node on the valley floor
+  with incoming falls and no outgoing anything, because the step up out of it happens to sit under
+  one. `navJumpCeiling` measures the climb a takeoff actually has and the whole arc is derived from
+  it.
+- **Aim into the surface being landed on, not at its nearest column.** A node's span starts
+  `NAV_BOX_W-1` columns before the solid it stands on, because an anchor counts as standable when
+  any one of the four footprint cells is supported — so the nearest anchor is the one where the body
+  hangs off the edge by three cells of four, and landing a pixel short of it is a fall. A couple of
+  columns of lead is the difference between 62–76% and 100%. The lead has to be tried against real
+  geometry and given up when it does not fly, though: a bigger lead is a longer arc over the same
+  fixed airtime, so it is a *faster* one, and a faster arc is already drifting sideways while it is
+  still level with the thing it is climbing onto.
+- **The vertical arc is exact, in both directions, if you use the discrete form.** `Character`'s
+  Step event adds half a tick's gravity, moves, then adds the other half, and midpoint integration
+  of a constant acceleration lands on the continuous curve at every integer tick — so
+  `v0*t - g*t²/2` is not an approximation here. Past terminal velocity it is: `vspeed` clamps at
+  10px/tick, which a jump reaches after 30.5 ticks, and ignoring that underestimates the deepest
+  drops the graph allows by 15% — which becomes a 15% *over*estimate of the speed the arc needs.
 - **Almost nothing in GG2 is hitscan.** Only the Sniper Rifle is true hitscan; every other weapon
   (including Scattergun, Shotgun, Minigun, Revolver) drops with per-tick gravity. A bot's aim
   solver needs drop compensation on all of them, not just the obviously-lobbed Minegun — a `Shot`
@@ -153,6 +182,15 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
     it, falling through to a direct aim for the Rifle and the Medigun's heal beam. Unit-tested in
     `Scripts/Unit tests/botaim/` against a forward simulation of `move_all_bullets` itself, so the
     solver and the engine cannot silently disagree.
+  - **Jump execution** (`navJumpFlight`, `navJumpHeight`, `navJumpCeiling`, `navJumpLanding`,
+    `botPathKeys`): implemented and verified. A jump edge now describes one specific arc — where it
+    leaves from, how much climb the ceiling above that leaves it, which column of the target it
+    aims at, how long it is in the air and how fast it crosses — and the follower flies that arc as
+    a trajectory rather than holding its speed. This is what makes a *chain* of steep jumps work,
+    where each link has to land for the next to be attempted. Verified on `koth_valley`: a bot
+    placed on the valley floor climbs all four steep jumps to the control point and stands on the
+    capture zone, where it previously managed one or two links in eight times the frames. All three
+    `gg_debug` legs from M5 still pass and are roughly twice as fast as when they were recorded.
   - **Not yet implemented**: per-class firing policy (engagement bands, the right-click behaviours,
     Medic needles versus heal beam) and the difficulty tiers. Bots currently all shoot at the same
     accuracy and cadence, and hold fire at whatever they can see.
