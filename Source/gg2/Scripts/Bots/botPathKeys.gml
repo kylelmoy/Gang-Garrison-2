@@ -112,9 +112,32 @@ else if(char.onground)
         // distance check never fires, because the bot is genuinely covering ground.
         // botPathFree has already zeroed botEdgeFrom/To if there was no edge running,
         // and botBlacklistEdge ignores negative nodes.
+        //
+        // But not on the first miss. Since jump takeoffs became a search, a lot of real
+        // edges are marginal - a three-column ledge reached by a slow steep arc - and
+        // those are flown stochastically rather than deterministically. Banning one for
+        // BOT_BLACKLIST_TICKS the first time it is missed costs five seconds of wandering
+        // for an edge that is perfectly good, which measured as ~250 frames to complete a
+        // hop that takes about 30: fifteen off-route events produced fifteen blacklists,
+        // and the blacklist was the whole delay. So the same edge gets one retry, and
+        // only a second consecutive failure takes it away. Two surfaces still cannot
+        // become a loop, which is what the blacklist is for - it just costs one more
+        // attempt to prove it.
         player.botOffRouteFires += 1;
         player.botOffPathTicks = 0;
-        botBlacklistEdge(player, player.botEdgeFrom, player.botEdgeTo);
+        if(player.botEdgeFrom == player.botFailFrom and player.botEdgeTo == player.botFailTo)
+            player.botFailCount += 1;
+        else
+        {
+            player.botFailFrom = player.botEdgeFrom;
+            player.botFailTo = player.botEdgeTo;
+            player.botFailCount = 1;
+        }
+        if(player.botFailCount >= 2)
+        {
+            botBlacklistEdge(player, player.botEdgeFrom, player.botEdgeTo);
+            player.botFailCount = 0;
+        }
         botPathPlan(player);
         return 0;
     }
@@ -323,10 +346,16 @@ else if(dirToNext < 0)
     keys |= KEY_LEFT;
 
 // Hold the flown speed to what the edge asked for. Braking is a press against the
-// motion, the same way the arrival branch stops a bot rather than letting it coast; in
-// the air it is enough to stop pressing, since the bot only ever accelerates while a
+// motion, the same way the arrival branch stops a bot rather than letting it coast;
+// otherwise it is enough to stop pressing, since the bot only ever accelerates while a
 // direction is held. Both replace the steering keys rather than adding to them, so the
 // bot cannot brake and steer in the same tick.
+//
+// The cap is deliberately air-only. Capping the ground approach as well - so the bot
+// arrives at the takeoff already travelling at the arc's speed rather than accelerating
+// into it from a stop - sounds better and measured no better: three trials of the same
+// koth_valley climb came out at <90, 273 and 277 frames against 220 and 239 without it.
+// The takeoff speed is not what those jumps are losing to.
 if(braking)
 {
     keys = keys & ~(KEY_LEFT | KEY_RIGHT);

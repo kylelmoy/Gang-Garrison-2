@@ -45,6 +45,11 @@
     botJumpHeld = false;
     botBlacklist = -1;
     botBlacklistQ = -1;
+    // Which edge last put the bot somewhere its route did not go, and how many times in
+    // a row. A marginal jump is worth one retry before it is taken away for seconds.
+    botFailFrom = -1;
+    botFailTo = -1;
+    botFailCount = 0;
     botLastReplanX = -100000;
     botLastReplanY = -100000;
     botReplanNear = 0;
