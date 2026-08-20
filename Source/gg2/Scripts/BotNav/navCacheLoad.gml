@@ -78,4 +78,8 @@ global.navNodeCount = nodeCount;
 global.navEdgeCount = edgeCount;
 global.navMaskW = maskW;
 global.navMaskH = maskH;
+
+// A cached graph needs the same adjacency index a freshly built one gets, or every
+// search on a cache hit would read an index belonging to the previous map.
+global.navEdgeIdx = navEdgeIndex(edges, edgeCount, nodeCount);
 return true;

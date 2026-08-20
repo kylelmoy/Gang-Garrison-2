@@ -8,7 +8,18 @@
   <resource name="navClearanceCols" type="RESOURCE"/>
   <resource name="navClearanceBuild" type="RESOURCE"/>
   <resource name="navNodesExtract" type="RESOURCE"/>
+  <resource name="navRowIndex" type="RESOURCE"/>
+  <resource name="navNodeGrid" type="RESOURCE"/>
+  <resource name="navEdgesBegin" type="RESOURCE"/>
+  <resource name="navEdgeAdd" type="RESOURCE"/>
   <resource name="navWalkEdges" type="RESOURCE"/>
+  <resource name="navFallEdges" type="RESOURCE"/>
+  <resource name="navEdgesBuild" type="RESOURCE"/>
+  <resource name="navEdgesSortByFrom" type="RESOURCE"/>
+  <resource name="navEdgeIndex" type="RESOURCE"/>
+  <resource name="navCountEdgeType" type="RESOURCE"/>
+  <resource name="navFindPath" type="RESOURCE"/>
+  <resource name="navNodeFromWorld" type="RESOURCE"/>
   <resource name="navCacheSave" type="RESOURCE"/>
   <resource name="navCacheLoad" type="RESOURCE"/>
   <resource name="navGraphFree" type="RESOURCE"/>

@@ -18,6 +18,7 @@ if(!variable_global_exists("navBuildState"))
     global.navReady = false;
     global.navNodes = -1;
     global.navEdges = -1;
+    global.navEdgeIdx = -1;
     global.navSolid = -1;
     global.navHfree = -1;
     global.navFree = -1;
@@ -62,6 +63,11 @@ if(global.navEdges >= 0)
 {
     ds_grid_destroy(global.navEdges);
     global.navEdges = -1;
+}
+if(variable_global_exists("navEdgeIdx") and global.navEdgeIdx >= 0)
+{
+    ds_grid_destroy(global.navEdgeIdx);
+    global.navEdgeIdx = -1;
 }
 
 global.navNodeCount = 0;

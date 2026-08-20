@@ -74,7 +74,9 @@ if(global.navBuildState == NAV_BUILD_FREE)
 if(global.navBuildState == NAV_BUILD_FINISH)
 {
     global.navNodes = navNodesExtract(global.navFree, global.navSolid, global.navMaskW, global.navMaskH);
-    global.navEdges = navWalkEdges(global.navNodes, global.navNodeCount, global.navMaskH);
+    global.navEdges = navEdgesBuild(global.navNodes, global.navNodeCount, global.navFree, global.navMaskW, global.navMaskH);
+
+    global.navEdgeIdx = navEdgeIndex(global.navEdges, global.navEdgeCount, global.navNodeCount);
 
     // The scaffolding is much larger than the graph and trivially rederivable.
     ds_grid_destroy(global.navHfree);

@@ -176,4 +176,5 @@
   <constant name="NAV_BUILD_FREE" value="3"/>
   <constant name="NAV_BUILD_FINISH" value="4"/>
   <constant name="NAV_BUILD_DONE" value="5"/>
+  <constant name="NAV_MAX_FALL" value="40"/>
 </constants>

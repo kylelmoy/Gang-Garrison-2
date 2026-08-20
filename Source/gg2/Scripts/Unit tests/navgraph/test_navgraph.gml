@@ -13,6 +13,27 @@ test_unit_begin();
 
 var solidGrid, freeGrid, nodes, edges, w, h;
 var oldMap, oldMd5, oldArea;
+var path, oldNodes, oldEdges, oldCount, oldEdgeCount, oldReady, testIdx, oldIdx;
+
+// This suite may run against a server with a live nav graph. navNodesExtract and
+// navEdgesBuild both report their results through globals, so every case below
+// overwrites the running graph book-keeping. Save it all now and put it back at the
+// end, or a passing test run leaves the server pathing against nonsense.
+oldNodes = -1;
+oldEdges = -1;
+oldCount = 0;
+oldEdgeCount = 0;
+oldReady = false;
+if(variable_global_exists("navNodes"))
+    oldNodes = global.navNodes;
+if(variable_global_exists("navEdges"))
+    oldEdges = global.navEdges;
+if(variable_global_exists("navNodeCount"))
+    oldCount = global.navNodeCount;
+if(variable_global_exists("navEdgeCount"))
+    oldEdgeCount = global.navEdgeCount;
+if(variable_global_exists("navReady"))
+    oldReady = global.navReady;
 
 // ---------------------------------------------------------------------------
 // A single flat floor produces exactly one surface.
@@ -35,8 +56,8 @@ test_assert_equals(8, ds_grid_get(nodes, NAV_NODE_Y, 0));
 test_assert_equals(0, ds_grid_get(nodes, NAV_NODE_X0, 0));
 test_assert_equals(w - NAV_BOX_W, ds_grid_get(nodes, NAV_NODE_X1, 0));
 
-// A lone surface has nothing to connect to.
-edges = navWalkEdges(nodes, global.navNodeCount, h);
+// A lone surface has nothing to connect to, and both its ends run off the map.
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
 test_assert_equals(0, global.navEdgeCount);
 
 ds_grid_destroy(edges);
@@ -72,7 +93,7 @@ ds_grid_destroy(solidGrid);
 // 30x24. Left platform solid from row 16, right platform from row 15 - exactly one
 // mask cell (6 world px) higher, which characterHitObstacle steps up for free (F24).
 // The two surfaces come out as y=8 spanning x 12..26 and y=9 spanning x 0..11, which
-// touch horizontally, so one bidirectional walk connection = 2 directed edges.
+// touch horizontally, so they get one bidirectional walk connection.
 // ---------------------------------------------------------------------------
 w = 30;
 h = 24;
@@ -83,16 +104,17 @@ ds_grid_set_region(solidGrid, 15, 15, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
 nodes = navNodesExtract(freeGrid, solidGrid, w, h);
-edges = navWalkEdges(nodes, global.navNodeCount, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
 
 test_assert_equals(2, global.navNodeCount);
 test_assert_equals(8, ds_grid_get(nodes, NAV_NODE_Y, 0));
 test_assert_equals(9, ds_grid_get(nodes, NAV_NODE_Y, 1));
-test_assert_equals(2, global.navEdgeCount);
-test_assert_equals(NAV_EDGE_WALK, ds_grid_get(edges, NAV_EDGE_TYPE, 0));
-// Emitted as a pair, so the second edge is the reverse of the first.
-test_assert_equals(ds_grid_get(edges, NAV_EDGE_FROM, 0), ds_grid_get(edges, NAV_EDGE_TO, 1));
-test_assert_equals(ds_grid_get(edges, NAV_EDGE_TO, 0), ds_grid_get(edges, NAV_EDGE_FROM, 1));
+
+// Two walk edges, one each way for the step, plus a one-way fall off the upper
+// surface left end down onto the lower one.
+test_assert_equals(3, global.navEdgeCount);
+test_assert_equals(2, navCountEdgeType(edges, global.navEdgeCount, NAV_EDGE_WALK));
+test_assert_equals(1, navCountEdgeType(edges, global.navEdgeCount, NAV_EDGE_FALL));
 
 ds_grid_destroy(edges);
 ds_grid_destroy(nodes);
@@ -100,8 +122,8 @@ ds_grid_destroy(freeGrid);
 ds_grid_destroy(solidGrid);
 
 // ---------------------------------------------------------------------------
-// A two-cell step is NOT walkable - it needs a jump edge, which this milestone does
-// not generate yet. Same map as above with the right platform one cell higher again.
+// A two-cell step is NOT walkable - it needs a jump edge, which is not generated yet.
+// Same map as above with the right platform one cell higher again.
 // ---------------------------------------------------------------------------
 w = 30;
 h = 24;
@@ -112,10 +134,14 @@ ds_grid_set_region(solidGrid, 15, 14, w - 1, h - 1, 1);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
 nodes = navNodesExtract(freeGrid, solidGrid, w, h);
-edges = navWalkEdges(nodes, global.navNodeCount, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
 
 test_assert_equals(2, global.navNodeCount);
-test_assert_equals(0, global.navEdgeCount);
+
+// Too tall to step, so no walk edge - but a character can still walk off the upper
+// ledge and drop, which is one-way until jump edges exist to supply the return.
+test_assert_equals(0, navCountEdgeType(edges, global.navEdgeCount, NAV_EDGE_WALK));
+test_assert_equals(1, navCountEdgeType(edges, global.navEdgeCount, NAV_EDGE_FALL));
 
 ds_grid_destroy(edges);
 ds_grid_destroy(nodes);
@@ -135,6 +161,66 @@ nodes = navNodesExtract(freeGrid, solidGrid, w, h);
 
 test_assert_equals(0, global.navNodeCount);
 
+ds_grid_destroy(nodes);
+ds_grid_destroy(freeGrid);
+ds_grid_destroy(solidGrid);
+
+// ---------------------------------------------------------------------------
+// A* over the built graph.
+//
+// Three stepped platforms, each one cell above the next, so the whole thing is walk
+// connected end to end and a path across it has to pass through the middle.
+//
+// navFindPath reads the graph from globals rather than taking it as arguments, since
+// there is one graph per server, so this stands them up and puts them back.
+// ---------------------------------------------------------------------------
+w = 44;
+h = 24;
+solidGrid = ds_grid_create(w, h);
+ds_grid_clear(solidGrid, 0);
+ds_grid_set_region(solidGrid, 0, 17, 14, h - 1, 1);
+ds_grid_set_region(solidGrid, 15, 16, 29, h - 1, 1);
+ds_grid_set_region(solidGrid, 30, 15, w - 1, h - 1, 1);
+
+freeGrid = navClearanceBuild(solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, w, h);
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, w, h);
+
+global.navNodes = nodes;
+global.navEdges = edges;
+// navFindPath reads a prebuilt adjacency index rather than deriving one per call, so
+// a stand-in graph has to supply its own or the search walks the live map's ranges.
+testIdx = navEdgeIndex(edges, global.navEdgeCount, global.navNodeCount);
+oldIdx = -1;
+if(variable_global_exists("navEdgeIdx"))
+    oldIdx = global.navEdgeIdx;
+global.navEdgeIdx = testIdx;
+global.navReady = true;
+
+// Three surfaces, and every one reachable from every other.
+test_assert_equals(3, global.navNodeCount);
+
+path = navFindPath(0, 2);
+test_assert_equals(true, path >= 0);
+test_assert_equals(3, ds_list_size(path));
+test_assert_equals(0, ds_list_find_value(path, 0));
+test_assert_equals(2, ds_list_find_value(path, 2));
+ds_list_destroy(path);
+
+// A path to itself is one node, not zero and not a loop.
+path = navFindPath(1, 1);
+test_assert_equals(1, ds_list_size(path));
+ds_list_destroy(path);
+
+// Out of range asks are refused rather than clamped.
+test_assert_equals(-1, navFindPath(0, 99));
+test_assert_equals(-1, navFindPath(-1, 0));
+
+global.navReady = false;
+global.navEdgeIdx = oldIdx;
+ds_grid_destroy(testIdx);
+
+ds_grid_destroy(edges);
 ds_grid_destroy(nodes);
 ds_grid_destroy(freeGrid);
 ds_grid_destroy(solidGrid);
@@ -179,5 +265,12 @@ test_assert_equals("my_map_v2_a1", navCacheKey());
 global.currentMap = oldMap;
 global.currentMapMD5 = oldMd5;
 global.currentMapArea = oldArea;
+
+// Hand the running graph back exactly as it was found.
+global.navNodes = oldNodes;
+global.navEdges = oldEdges;
+global.navNodeCount = oldCount;
+global.navEdgeCount = oldEdgeCount;
+global.navReady = oldReady;
 
 test_unit_end();
