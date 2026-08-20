@@ -75,7 +75,10 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
   point-sampled, because a node occupies one row of the mask and a falling arc rounds past it.
 - **Almost nothing in GG2 is hitscan.** Only the Sniper Rifle is true hitscan; every other weapon
   (including Scattergun, Shotgun, Minigun, Revolver) drops with per-tick gravity. A bot's aim
-  solver needs drop compensation on all of them, not just the obviously-lobbed Minegun.
+  solver needs drop compensation on all of them, not just the obviously-lobbed Minegun — a `Shot`
+  crossing the 375px combat radius sags about 64px, a whole character height. Note the sag after
+  `t` ticks is `gravity*t*(t+1)/2`, not `gravity*t²/2`: the engine adds gravity to `vspeed` before
+  it applies the move, so the discrete form is the exact one.
 
 ## Status
 
@@ -116,6 +119,25 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
   does not go, and blacklists the edge that misled it. Verified on `gg_debug`: a bot walks from
   spawn to a named point through a drop-through platform, back uphill over jump edges, and through
   its own team gate, arriving within a few pixels each time.
-- **M6** (objectives per game mode, per-class policies, difficulty tiers) is tracked in the
-  project's working notes, not yet implemented. Bots navigate on command but choose no destination
-  of their own yet.
+- **M6** — objectives and aim: partly implemented.
+  - **Objectives per game mode** (`Scripts/Bots/botObjectiveUpdate.gml`): implemented and verified.
+    The game mode is inferred from which objects exist, the same way `basicRoomSetup` does it, since
+    nothing stores it. CTF/Invasion bots fetch the enemy intel and run it home once carrying;
+    Generator bots move on the enemy generator; KOTH, Arena, A/D and symmetrical CP all share one
+    branch that targets the nearest *unlocked* control point's `CaptureZone`, which spreads bots
+    across a multi-point map for free; DKOTH is special-cased because each team caps the other
+    team's point. TDM issues no goal — there is no landmark to seek — so bots there keep the
+    pre-M6 behaviour of fighting whatever comes into range. Goals are recomputed on a coarse
+    cadence and only reissued when the target actually moves, because issuing one forces a re-plan.
+    Verified live on `ctf_truefort`, `gen_destroy`, `koth_valley`, `cp_egypt` and `dkoth_sixties`.
+  - **Aim** (`Scripts/Bots/botAimLead.gml`, `botAimSolve.gml`): implemented and verified. Bots
+    solve drop compensation and target leading together, rather than aiming straight at a target
+    the way they did through M3. `botAimLead` is pure arithmetic — one fixed-point iteration on the
+    flight time, since rearranging the projectile's equations of motion turns the problem back into
+    a straight-line aim at a virtual point — and `botAimSolve` is the per-weapon table on top of
+    it, falling through to a direct aim for the Rifle and the Medigun's heal beam. Unit-tested in
+    `Scripts/Unit tests/botaim/` against a forward simulation of `move_all_bullets` itself, so the
+    solver and the engine cannot silently disagree.
+  - **Not yet implemented**: per-class firing policy (engagement bands, the right-click behaviours,
+    Medic needles versus heal beam) and the difficulty tiers. Bots currently all shoot at the same
+    accuracy and cadence, and hold fire at whatever they can see.
