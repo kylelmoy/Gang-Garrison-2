@@ -20,7 +20,10 @@
   <resource name="navWalkEdges" type="RESOURCE"/>
   <resource name="navFallEdges" type="RESOURCE"/>
   <resource name="navDropEdges" type="RESOURCE"/>
+  <resource name="navJumpCeiling" type="RESOURCE"/>
+  <resource name="navJumpHeight" type="RESOURCE"/>
   <resource name="navJumpFlight" type="RESOURCE"/>
+  <resource name="navJumpLanding" type="RESOURCE"/>
   <resource name="navJumpTakeoff" type="RESOURCE"/>
   <resource name="navJumpEdges" type="RESOURCE"/>
   <resource name="navMoveBoxEdges" type="RESOURCE"/>

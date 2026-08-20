@@ -1,99 +1,83 @@
-/// navJumpFlight(ay, by, dCells)
-/// How long, in ticks, a jump from anchor row ay to anchor row by is in the air while
+/// navJumpFlight(ay, by, dCells, capHeight)
+/// How long, in ticks, a jump from anchor row ay onto anchor row by lasts while
 /// covering dCells anchor columns - or -1 if GG2's jump cannot do it at all.
 ///
-/// This exists because "how long is the jump" has two different answers depending on
-/// which way it goes, and getting that wrong silently fills the graph with edges no
-/// bot can traverse, or - the bug this version fixes - silently leaves out edges a bot
-/// plainly can traverse.
+/// **A jump ends where the arc comes back down, and nowhere else.** GG2's jump is a
+/// fixed impulse: it rises until it runs out of climb or hits something, and lasts
+/// until the arc descends through whatever it lands on. There is no short jump and no
+/// variable jump height, so the flight time is a function of the *rise* - the
+/// horizontal distance does not shorten it, it only has to be coverable within it:
+/// dCells*NAV_CELL_SIZE <= NAV_JUMP_VX * t, or there is no edge.
 ///
-///   Landing below (by > ay): arriving over the landing column proves nothing - from a
-///   ledge, every surface below is "arrived over" within a tick or two while the
-///   character is still tens of pixels up in the air. The jump ends when the arc falls
-///   back down to the landing row, which is a much longer flight, and the horizontal
-///   distance is then a *constraint* rather than the thing that sets the time: the
-///   character must be able to cover it in the time it takes to fall, so the required
-///   speed has to be within what the class can run at (F41).
+/// `capHeight` is how far the character may rise before a ceiling stops it (see
+/// navJumpHeight, which owns the arc itself). Anything at or above the apex means
+/// nothing is in the way. A cap below the landing is a rejection: the character
+/// cannot get high enough to land there, whatever it does sideways.
 ///
-///   Landing level or above (by <= ay): a fast dash - horizontal distance at full speed
-///   - is tried first, because a character does not dawdle in the air if it does not
-///   need to (this is the case the existing tests pin down: a flat ten-cell jump is a
-///   13-tick dash, not a 28-tick full arc). If that dash does not gain enough height in
-///   time - a *steep, short* jump, more climb than distance - the character instead
-///   runs slower and spends longer airborne, up to the first moment the arc reaches the
-///   required height. That "slow down" option only helps when the fast dash arrives
-///   *before* the arc could possibly be high enough; if it is already past the whole
-///   window where the arc is that high (too far sideways for the height on offer, at
-///   any speed up to the cap), slowing down only makes the arrival later still, so it
-///   is correctly still a rejection, not a slower acceptance.
+/// ⚠️ **The bug this replaced, and it is F41 again in the other direction.** The old
+/// code timed a *climbing* jump by when the arc first reached the landing height -
+/// the earliest moment the character is level with the target. That is not a landing.
+/// The character is still rising then, and it keeps rising for another 57px worth of
+/// arc before coming down somewhere else entirely. Because the caller derives the
+/// horizontal speed as distance/time, a short time meant a fast arc, and the bot flew
+/// off the far side of everything it was aimed at.
 ///
-///   ⚠️ **The bug this replaced**: the old code always used the fast-dash time for the
-///   "at or above" case, full stop - which is exactly right for a shallow or flat jump
-///   but wrongly rejects a steep one, because dashing across one cell in barely a tick
-///   leaves no time to rise even though the same jump, taken slowly, clears it with
-///   room to spare. Concretely: one column over and eight rows up (48px, close to the
-///   full ~57px a standing jump can reach) came back -1, because arriving in the
-///   1.3 ticks a full-speed dash takes only gains 10px - and that is a completely
-///   ordinary "jump up onto the next step" a stairway is built from. Verified live: on
-///   `koth_valley`, this alone was enough to disconnect a bot's spawn from all but 5%
-///   of the nav graph, and the failure was visible as a screenshot overlay (green
-///   reachable, red not) where the red started exactly at the base of the first tall
-///   staircase past spawn.
+/// Measured against a tick-by-tick simulation of Character's own integration, for a
+/// climb of six rows onto a ledge two cells away: the old model called it a 5.4-tick
+/// flight at 2.2px/tick, and a bot flying exactly that came down 47px away - four
+/// cells past an 18px ledge. The same jump under this model is a 22.3-tick flight at
+/// 0.54px/tick and lands on it. Across a sweep of every class, rise, ledge width and
+/// run-up distance, "does the bot end up on the node the edge names" went from 12-19%
+/// to 100%. That is the whole of koth_valley's four-jump chain to the control point.
 ///
-/// Callers get the speed actually flown back out of this as dCells*NAV_CELL_SIZE/t,
-/// which is NAV_JUMP_VX exactly for a fast dash and something slower for both a drop
-/// and a slow climb. Sampling the arc at NAV_JUMP_VX regardless is what produced jump
-/// edges from a ledge to a surface sixteen rows below with another surface in between
-/// (F41) - the same mistake this fix undoes for the climbing case.
+/// F41 fixed exactly this reasoning for jumps that land *below* the takeoff, where
+/// "arrives over the target" is true on the first tick. The climbing case kept its own
+/// version of the same mistake: "arrives level with the target" is true 17 ticks before
+/// the character is anywhere near landing on it.
+///
+/// Callers get the speed the arc is flown at as dCells*NAV_CELL_SIZE/t, and both the
+/// generator's clearance sampling and the path follower's steering use that same
+/// number, which is what makes the edge in the graph and the jump the bot actually
+/// flies the same jump.
 
-var ay, by, dCells, riseWorld, dWorld, t, tFast, peakFast, disc, t1;
+var ay, by, dCells, capHeight, riseWorld, dWorld, apexHeight, tUp, fall, dTerm, hTerm, d, t;
 
 ay = argument0;
 by = argument1;
 dCells = argument2;
+capHeight = argument3;
 
 riseWorld = (ay - by) * NAV_CELL_SIZE;
 dWorld = dCells * NAV_CELL_SIZE;
 
-if(by > ay)
-{
-    // Positive root of v0*t - g*t*t/2 = riseWorld with riseWorld negative, so the
-    // discriminant is always larger than v0*v0 and the root always real.
-    disc = NAV_JUMP_V0 * NAV_JUMP_V0 - 2 * NAV_JUMP_GRAVITY * riseWorld;
-    t = (NAV_JUMP_V0 + sqrt(disc)) / NAV_JUMP_GRAVITY;
+apexHeight = NAV_JUMP_V0 * NAV_JUMP_V0 / (2 * NAV_JUMP_GRAVITY);
+if(capHeight > apexHeight)
+    capHeight = apexHeight;
+if(capHeight < 0)
+    capHeight = 0;
 
-    // Too far sideways to cross before gravity puts the character on the floor.
-    if(dWorld > NAV_JUMP_VX * t)
-        return -1;
-}
+// Higher than the character can get, whether that is the apex or a ceiling below it.
+if(riseWorld > capHeight)
+    return -1;
+
+tUp = (NAV_JUMP_V0 - sqrt(max(0, NAV_JUMP_V0 * NAV_JUMP_V0 - 2 * NAV_JUMP_GRAVITY * capHeight)))
+      / NAV_JUMP_GRAVITY;
+
+// Falling from the top of the rise to the landing row, with the terminal-velocity
+// clamp that the long drops actually spend most of their time in.
+fall = capHeight - riseWorld;
+dTerm = NAV_JUMP_TERM_VY / NAV_JUMP_GRAVITY;
+hTerm = NAV_JUMP_GRAVITY * dTerm * dTerm / 2;
+if(fall <= hTerm)
+    d = sqrt(2 * fall / NAV_JUMP_GRAVITY);
 else
-{
-    tFast = dWorld / NAV_JUMP_VX;
-    peakFast = NAV_JUMP_V0 * tFast - NAV_JUMP_GRAVITY * tFast * tFast / 2;
+    d = dTerm + (fall - hTerm) / NAV_JUMP_TERM_VY;
 
-    if(peakFast >= riseWorld)
-    {
-        // The easy, common case: a dash already clears it.
-        t = tFast;
-    }
-    else
-    {
-        // Not enough height yet at full speed - is there a valid, slower speed that
-        // gets there in time, or is the target simply out of reach at any speed up to
-        // the cap? v0*t - g*t*t/2 = riseWorld has two roots when riseWorld is within
-        // the jump's reach at all; t1 (rising) is only a real option if the fast dash
-        // would arrive *before* it, i.e. slowing down has somewhere to go.
-        disc = NAV_JUMP_V0 * NAV_JUMP_V0 - 2 * NAV_JUMP_GRAVITY * riseWorld;
-        if(disc < 0)
-            return -1;
+t = tUp + d;
 
-        t1 = (NAV_JUMP_V0 - sqrt(disc)) / NAV_JUMP_GRAVITY;
-        if(tFast < t1)
-            t = t1;
-        else
-            return -1;
-    }
-}
+// Too far sideways to cross before the arc puts the character back on the floor.
+if(dWorld > NAV_JUMP_VX * t)
+    return -1;
 
 if(t > NAV_JUMP_MAX_TICKS)
     return -1;

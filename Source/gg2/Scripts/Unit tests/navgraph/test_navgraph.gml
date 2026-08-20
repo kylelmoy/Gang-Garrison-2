@@ -21,7 +21,7 @@ var solidGrid, freeGrid, platformGrid, lethalGrid, doorGrid, gateGrid, nodeGrid,
 var oldMap, oldMd5, oldArea, oldSetup, gateInst, gl, gt, gr, gb;
 var path, oldNodes, oldEdges, oldCount, oldEdgeCount, oldReady, testIdx, oldIdx;
 var ei, hasUpperToBlock, hasUpperToFloor;
-var groundNode, crateNode, gx0, gx1, cx0, cx1, takeoffCol, hasClimb;
+var groundNode, crateNode, gx0, gx1, cx0, cx1, takeoffCol, landCol, hasClimb;
 
 // This suite may run against a server with a live nav graph. navNodesExtract and
 // navEdgesBuild both report their results through globals, so every case below
@@ -226,49 +226,148 @@ ds_grid_destroy(freeGrid);
 ds_grid_destroy(solidGrid);
 
 // ---------------------------------------------------------------------------
-// How long a jump lasts, which is not the same question going up as going down.
+// The arc itself, and how long a jump lasts - which is one question, not two.
 //
-// navJumpFlight is the whole of F41 in one script. Landing level or above, the jump
-// ends when the character first arrives over the target, so the horizontal distance
-// sets the time. Landing below, arriving overhead proves nothing - it happens on the
-// first tick, tens of pixels up - and the jump ends when the arc falls back to the
-// landing row instead, which is many times longer.
+// GG2's jump is a fixed impulse, so a jump ends where the arc comes back down and
+// the rise alone sets the time. Both of the plausible-sounding shortcuts are wrong
+// and both have been in this file: "when the character first arrives over the target"
+// is true on the first tick of a drop (F41), and "when it first arrives level with the
+// target" is true seventeen ticks before a steep climb lands. Each one made the flight
+// short, which made the horizontal speed derived from it fast, which flew the bot off
+// the far side of what it was aimed at.
+//
+// Every number below is checked against a tick-by-tick simulation of Character's own
+// Begin Step + Step integration, not derived by hand.
 // ---------------------------------------------------------------------------
 
-// Level, ten cells: 60 world px at Heavy's 4.53 px/tick.
-test_assert_equals(13, round(navJumpFlight(10, 10, 10)));
+// The arc is exact at integer ticks, because Step.xml adds half a tick's gravity,
+// moves, then adds the other half, and midpoint integration of a constant acceleration
+// is the continuous curve.
+test_assert_equals(53, navJumpHeight(10, 999));
+test_assert_equals(57, round(navJumpHeight(14, 999)));
 
-// Up 30px over five cells. The arc is 41.8px high on arrival, so it clears.
-test_assert_equals(7, round(navJumpFlight(20, 15, 5)));
+// ...until terminal velocity, where the parabola runs away from the engine: vspeed
+// clamps at 10 px/tick after 30.5 ticks and the fall becomes linear.
+test_assert_equals(-26, round(navJumpHeight(30.5, 999)));
+test_assert_equals(-121, round(navJumpHeight(40, 999)));
+
+// Level, ten cells: airborne the full 27.7 ticks, whatever the distance. A character
+// that jumps is committed to the whole arc - there is no short jump in this game.
+test_assert_equals(28, round(navJumpFlight(10, 10, 10, 999)));
+
+// Up 30px over five cells. Reaches that height at 3.9 ticks and lands at 23.4.
+test_assert_equals(23, round(navJumpFlight(20, 15, 5, 999)));
 
 // Up 72px one cell away. GG2's jump peaks at 57px, so no speed makes this.
-test_assert_equals(-1, navJumpFlight(20, 8, 1));
+test_assert_equals(-1, navJumpFlight(20, 8, 1, 999));
 
-// The gg_debug case: sixteen rows down, three cells across. The old model called
-// this a four-tick hop because the character is "over" the target immediately; it
-// is really a thirty-six tick fall, and the difference is every surface in between.
-test_assert_equals(36, round(navJumpFlight(29, 45, 3)));
+// The gg_debug case: sixteen rows down, three cells across. Called a four-tick hop by
+// the model before F41 and a 36-tick fall by the model after it; the real answer is
+// 37.5, because the last third of that fall is at terminal velocity.
+test_assert_equals(38, round(navJumpFlight(29, 45, 3, 999)));
+
+// The deepest drop the graph will consider, 240px. The parabola alone says 45 ticks
+// and the engine takes 52 - a 15% error, and so a 15% overestimate of the speed the
+// arc needs, in the direction that overshoots.
+test_assert_equals(52, round(navJumpFlight(10, 50, 5, 999)));
 
 // One row down but forty cells across - only 128px of travel before landing.
-test_assert_equals(-1, navJumpFlight(0, 1, 40));
+test_assert_equals(-1, navJumpFlight(0, 1, 40, 999));
 
-// Level and beyond NAV_JUMP_MAX_TICKS.
-test_assert_equals(-1, navJumpFlight(10, 10, 50));
+// Level and fifty cells: 27.7 ticks at Heavy's 4.53 px/tick is 125px of travel, and
+// this asks for 300. The old model accepted flat jumps of any length because it timed
+// them by the distance itself.
+test_assert_equals(-1, navJumpFlight(10, 10, 50, 999));
+
+// A steep climb's flight time is set by the rise alone, so two cells across and eight
+// cells across are the same 19.4 ticks - one is just flown four times faster.
+test_assert_equals(round(navJumpFlight(18, 10, 2, 999)), round(navJumpFlight(18, 10, 8, 999)));
+test_assert_equals(19, round(navJumpFlight(18, 10, 2, 999)));
+
+// ...but only up to what NAV_JUMP_VX covers in that time, which is 14.7 cells.
+test_assert_equals(-1, navJumpFlight(18, 10, 15, 999));
 
 // ---------------------------------------------------------------------------
-// Climbing onto a crate: the takeoff column is a search, not the end of the run.
+// Hitting your head is a kind of jump, not a failed one.
+//
+// A ceiling zeroes vspeed and the character comes down from there. The arc is shorter,
+// so it is over sooner and has to be flown faster to cover the same ground - and it is
+// still a jump that lands. Refusing to model it is what left a koth_valley bot standing
+// on the valley floor with no outgoing edge at all: the step up out of it happens to sit
+// under an overhang.
+// ---------------------------------------------------------------------------
+
+// Capped at 48px, the rise ends at 8.2 ticks instead of 13.8 and the arc is past its
+// top for the rest of the flight.
+test_assert_equals(48, round(navJumpHeight(8.233, 48)));
+test_assert_equals(true, navJumpHeight(11, 48) < 48);
+test_assert_equals(true, navJumpHeight(11, 999) > 48);
+
+// Landing six rows up under that ceiling: 14.6 ticks rather than the 22.3 an
+// unobstructed arc takes, so the same one-cell hop is flown 50% faster.
+test_assert_equals(15, round(navJumpFlight(131, 125, 1, 48)));
+test_assert_equals(22, round(navJumpFlight(131, 125, 1, 999)));
+
+// A ceiling below the landing is a real rejection - no arc gets there.
+test_assert_equals(-1, navJumpFlight(131, 125, 1, 30));
+
+// And a cap at or above the apex changes nothing at all, which is what makes this one
+// formula rather than two.
+test_assert_equals(navJumpFlight(131, 125, 1, 999), navJumpFlight(131, 125, 1, 57.5));
+
+// ---------------------------------------------------------------------------
+// Where on the target surface to aim: into it, not at its edge.
+//
+// A node's span starts NAV_BOX_W-1 columns before the solid it stands on, because an
+// anchor is standable when any one footprint cell is supported. So the nearest column -
+// the obvious aim point, and the one used until now - is the one where the body hangs
+// off the edge by three cells of four, and landing a pixel short of it is a fall.
+// ---------------------------------------------------------------------------
+
+// Aims NAV_JUMP_LAND_LEAD into the span rather than at column 17.
+test_assert_equals(17 + NAV_JUMP_LAND_LEAD,
+                   navJumpLanding(18, 10, 12, 17, 27, 1, NAV_JUMP_LAND_LEAD, 999));
+test_assert_equals(17, navJumpLanding(18, 10, 12, 17, 27, 1, 0, 999));
+
+// Mirrored going left.
+test_assert_equals(27 - NAV_JUMP_LAND_LEAD,
+                   navJumpLanding(18, 10, 30, 17, 27, -1, NAV_JUMP_LAND_LEAD, 999));
+
+// A lead that runs off the end of the span is refused rather than clamped, because the
+// caller is walking the leads down anyway and a clamp would make it walk the same
+// column twice.
+test_assert_equals(-1, navJumpLanding(18, 10, 12, 17, 18, 1, 2, 999));
+test_assert_equals(18, navJumpLanding(18, 10, 12, 17, 18, 1, 1, 999));
+
+// Refused for reach, too: this arc is 19.4 ticks, which NAV_JUMP_VX covers 14.7 cells
+// of, and a full lead onto this span would ask for 15.
+test_assert_equals(-1, navJumpLanding(18, 10, 0, 13, 16, 1, 2, 999));
+test_assert_equals(14, navJumpLanding(18, 10, 0, 13, 16, 1, 1, 999));
+
+// Nothing on the target is reachable at all, at any lead.
+test_assert_equals(-1, navJumpLanding(18, 10, 0, 30, 40, 1, 0, 999));
+
+// ---------------------------------------------------------------------------
+// Climbing onto a crate, standing right against it.
 //
 // This is koth_valley's geometry, shrunk. Flat ground, and standing on it an 8-cell
 // wide, 8-row tall crate whose top is its own surface. A character is NAV_BOX_W cells
-// wide and anchored at its left column, so at the last anchor before the crate its
-// body is flush against it - and from there no arc onto the crate clears, whichever
-// column it aims at. Stepping the takeoff a few cells back makes the identical jump
-// fine.
+// wide and anchored at its left column, so at the last anchor before the crate its body
+// is flush against the crate's side.
 //
-// The bug this pins down cost koth_valley 257 of its 270 nodes: bots could not leave
-// the spawn valley at all, because the first obstacle past spawn was exactly this
-// shape. It also survived one investigation that varied the landing column instead of
-// the takeoff and concluded the geometry was simply impassable.
+// ⚠️ This section used to assert the opposite of what it asserts now, and the change is
+// not a relaxation. It read: from the run's end no arc onto the crate clears, whichever
+// column it aims at, so the takeoff has to step back. That was true of every arc the
+// generator could then describe, because a climbing jump was timed to when it first drew
+// level with the crate - which makes it a fast arc, and a fast arc is already moving
+// sideways into the crate's side while it is still below the top. It is not true of the
+// jump a player makes: walk up to a crate, jump, drift, land on it. With the flight model
+// corrected the slowest arc onto the crate - a third of a pixel a tick - rises clear
+// before it drifts a single column, so the run's end flies it after all.
+//
+// So the honest test of the takeoff search is not this shape at all: stepping back from a
+// crate makes the *same* landing further away, which makes the arc faster, which is
+// exactly the wrong direction. The overhang case below is one where it genuinely matters.
 // ---------------------------------------------------------------------------
 w = 40;
 h = 40;
@@ -303,19 +402,24 @@ cx0 = ds_grid_get(nodes, NAV_NODE_X0, crateNode);
 cx1 = ds_grid_get(nodes, NAV_NODE_X1, crateNode);
 test_assert_equals(20, gx1 + NAV_BOX_W);
 
-// The end of the run cannot fly it - that is the whole finding, so assert it directly
-// rather than only asserting the fix. navJumpTakeoff is handed a source span of one
-// column, pinned to the run's end, which is exactly what the old code always used.
+// The end of the run flies it, given an arc slow enough. Handing navJumpTakeoff a source
+// span of one column pins it to that takeoff, with nowhere to step back to.
 nodeGrid = navNodeGrid(nodes, global.navNodeCount, w, h);
-test_assert_equals(-1, navJumpTakeoff(freeGrid, nodeGrid, 18, gx1, gx1,
-                                      10, cx0, cx1, 1, w, h, crateNode));
+test_assert_equals(gx1, navJumpTakeoff(freeGrid, nodeGrid, 18, gx1, gx1,
+                                       10, cx0, cx1, 1, w, h, crateNode));
 
-// Given the whole run to choose from, it finds one that does - and it is genuinely a
-// few cells back from the end, not the end itself.
+// ...and it is slow, and it aims at the crate's nearest anchor rather than into it,
+// because at 48px of rise there is no time for anything else: every column of lead is a
+// faster arc, and a faster arc hits the crate's side. The landing being marginal here is
+// the geometry's doing, not a shortcut - a bot has to land its body's rightmost cell on
+// the crate's leftmost column, which is exactly the jump a player makes.
+test_assert_equals(cx0, global.navJumpLandCol);
+
+// Given the whole run to choose from, the answer is the same one: stepping back only
+// lengthens the jump.
 takeoffCol = navJumpTakeoff(freeGrid, nodeGrid, 18, gx0, gx1,
                             10, cx0, cx1, 1, w, h, crateNode);
-test_assert_equals(true, takeoffCol >= 0);
-test_assert_equals(true, takeoffCol < gx1);
+test_assert_equals(gx1, takeoffCol);
 
 // And the edge generator emits the edge, carrying that takeoff column on it so the
 // follower jumps from where the build proved it could rather than from the run's end.
@@ -329,11 +433,98 @@ for(ei = 0; ei < global.navEdgeCount; ei += 1)
     {
         hasClimb = true;
         test_assert_equals(takeoffCol, ds_grid_get(edges, NAV_EDGE_TAKEOFF, ei));
+
+        // The contract between the generator and the path follower, asserted rather
+        // than assumed: the follower never re-derives the landing, it multiplies the
+        // stored speed by the stored duration to get how far along the arc goes, and
+        // steers to takeoff + speed*tick. So those two numbers have to carry the
+        // distance exactly - which is also why they are stored unrounded. Rounding a
+        // 0.6px/tick arc to 1 moves the landing eight cells.
+        landCol = takeoffCol + round(ds_grid_get(edges, NAV_EDGE_BUCKET, ei)
+                                     * ds_grid_get(edges, NAV_EDGE_TICKS, ei)
+                                     / NAV_CELL_SIZE);
+
+        // Nothing obliges those two numbers to multiply back to a whole number of
+        // cells - they are a speed and a duration, and the product is a float - but the
+        // arc they describe has to end on the column the build chose, so they do to
+        // within rounding.
+        test_assert_equals(true,
+                           abs(ds_grid_get(edges, NAV_EDGE_BUCKET, ei)
+                               * ds_grid_get(edges, NAV_EDGE_TICKS, ei)
+                               / NAV_CELL_SIZE
+                               - (landCol - takeoffCol)) < 0.001);
+
+        // And wherever it lands, it lands on the node the edge names.
+        test_assert_equals(true, landCol >= cx0);
+        test_assert_equals(true, landCol <= cx1);
     }
 }
 test_assert_equals(true, hasClimb);
 
 ds_grid_destroy(edges);
+ds_grid_destroy(nodeGrid);
+ds_grid_destroy(nodes);
+ds_grid_destroy(freeGrid);
+ds_grid_destroy(solidGrid);
+
+// ---------------------------------------------------------------------------
+// Where the takeoff search does earn its place: a ceiling over the end of the run.
+//
+// The same crate, plus a stalactite hanging down to row 8 over the two columns the
+// character would be standing under at the run's end. The jump itself is unchanged and
+// perfectly possible - it is the first few ticks of the *rise* that hit the ceiling, and
+// nothing about the arc can fix that, because every jump in this game rises 57px whether
+// it needs to or not. Two columns further left there is headroom and the identical jump
+// is clean.
+//
+// This is the shape the takeoff search is actually for: the obstruction is over the
+// takeoff, not over the landing, so no amount of aiming elsewhere helps.
+// ---------------------------------------------------------------------------
+w = 40;
+h = 40;
+solidGrid = ds_grid_create(w, h);
+ds_grid_clear(solidGrid, 0);
+ds_grid_set_region(solidGrid, 0, 25, w - 1, h - 1, 1);   // ground, top at row 25
+ds_grid_set_region(solidGrid, 20, 19, 27, 24, 1);        // crate, top at row 19
+ds_grid_set_region(solidGrid, 14, 10, 16, 11, 1);        // overhang over columns 14-16
+
+freeGrid = navClearanceBuild(solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
+
+groundNode = -1;
+crateNode = -1;
+for(ei = 0; ei < global.navNodeCount; ei += 1)
+{
+    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 18 and ds_grid_get(nodes, NAV_NODE_X0, ei) == 0)
+        groundNode = ei;
+    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 12 and ds_grid_get(nodes, NAV_NODE_X1, ei) >= 27)
+        crateNode = ei;
+}
+test_assert_equals(true, groundNode >= 0);
+test_assert_equals(true, crateNode >= 0);
+
+gx0 = ds_grid_get(nodes, NAV_NODE_X0, groundNode);
+gx1 = ds_grid_get(nodes, NAV_NODE_X1, groundNode);
+cx0 = ds_grid_get(nodes, NAV_NODE_X0, crateNode);
+cx1 = ds_grid_get(nodes, NAV_NODE_X1, crateNode);
+
+// The overhang does not stop the character standing under it - it is head height, not
+// body height - so the run still ends flush against the crate.
+test_assert_equals(16, gx1);
+
+nodeGrid = navNodeGrid(nodes, global.navNodeCount, w, h);
+
+// From the run's end, blocked at every lead.
+test_assert_equals(-1, navJumpTakeoff(freeGrid, nodeGrid, 18, gx1, gx1,
+                                      12, cx0, cx1, 1, w, h, crateNode));
+
+// Given the run to search, it steps back and flies it.
+takeoffCol = navJumpTakeoff(freeGrid, nodeGrid, 18, gx0, gx1,
+                            12, cx0, cx1, 1, w, h, crateNode);
+test_assert_equals(14, takeoffCol);
+test_assert_equals(true, global.navJumpLandCol >= cx0);
+test_assert_equals(true, global.navJumpLandCol <= cx1);
+
 ds_grid_destroy(nodeGrid);
 ds_grid_destroy(nodes);
 ds_grid_destroy(freeGrid);

@@ -14,3 +14,13 @@ global.navAccEdges = ds_grid_create(NAV_EDGE_FIELDS, 64);
 ds_grid_clear(global.navAccEdges, 0);
 global.navAccCount = 0;
 global.navAccCap = 64;
+
+// navJumpTakeoff's other return values, describing the arc it proved: which column on
+// the target it aims at, how long it is in the air, how fast it crosses, and how much
+// climb the ceiling above the takeoff left it. Declared here so they exist before any
+// generator runs, since GM8 has no notion of an unset global beyond the error it raises
+// for reading one.
+global.navJumpLandCol = -1;
+global.navJumpTicks = -1;
+global.navJumpVx = 0;
+global.navJumpCapH = 0;

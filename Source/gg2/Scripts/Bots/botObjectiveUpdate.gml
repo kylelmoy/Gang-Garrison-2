@@ -83,8 +83,11 @@ else if(instance_exists(KothRedControlPoint) and instance_exists(KothBlueControl
         {
             if(cp == zoneCp)
             {
-                wx = x;
-                wy = y;
+                // The middle of the zone rather than its top-left origin - see the
+                // generic control-point branch below for what standing on the boundary
+                // costs.
+                wx = (bbox_left + bbox_right) / 2;
+                wy = (bbox_top + bbox_bottom) / 2;
             }
         }
         found = true;
@@ -118,8 +121,15 @@ else if(instance_exists(ControlPoint))
         {
             if(cp == zoneCp)
             {
-                wx = x;
-                wy = y;
+                // The middle of the zone, not its origin. A CaptureZone's origin is its
+                // top-left corner, so aiming there asks the follower to stop on the exact
+                // boundary of the thing it is trying to stand in - and arrival is only
+                // accurate to BOT_ARRIVE_TOL. Measured on koth_valley: the bot climbed
+                // the whole four-jump chain, stopped 3px short of the zone's left edge,
+                // and captured nothing. The zone is 125px wide; its centre is not a
+                // near miss.
+                wx = (bbox_left + bbox_right) / 2;
+                wy = (bbox_top + bbox_bottom) / 2;
             }
         }
         found = true;

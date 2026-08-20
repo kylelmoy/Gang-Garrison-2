@@ -19,9 +19,9 @@
 ///
 /// Only the edge *types* the graph can produce are handled here, and each is steered by
 /// the geometry the corresponding generator used, not by a general rule - a fall leaves
-/// past the end of a surface, a drop-through goes down through its middle, a jump needs
-/// its takeoff at the right end and at speed. Getting those from the same numbers the
-/// build used is what keeps the follower honest about what it planned.
+/// past the end of a surface, a drop-through goes down through its middle, a jump leaves
+/// from a searched column and then flies a specific arc. Getting those from the same
+/// numbers the build used is what keeps the follower honest about what it planned.
 ///
 /// Jump is edge-triggered, not held. Character's Begin Step jumps on pressedKeys & $80
 /// (a rising edge), so a bot holding JUMP down jumps exactly once and then never again;
@@ -30,7 +30,7 @@
 
 var player, char, keys, here, size, cur, nxt, i, edgeRow, edgeType, found, moved;
 var mx, targetCol, tx, gx, n0, n1, c0, c1, takeoffCol, wantJump, dirToNext;
-var needVx, jumpEdge, braking;
+var needVx, braking, tracking, flightTicks, jumpDist, jumpDir, jumpWantX;
 
 player = argument0;
 char = player.object;
@@ -256,9 +256,10 @@ else
 }
 
 wantJump = false;
-jumpEdge = false;
 braking = false;
+tracking = false;
 needVx = 0;
+jumpWantX = 0;
 
 if(edgeType == NAV_EDGE_DROPTHROUGH)
 {
@@ -294,37 +295,74 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
             takeoffCol = c0;
     }
 
-    // A jump edge is flown at the speed the build simulated it at, not at a sprint.
-    // navJumpFlight returns a horizontal speed rather than assuming NAV_JUMP_VX, and
-    // for a steep climb - the ordinary "hop onto a crate" - that speed is 1 to 3 px per
-    // tick, because the character has to spend most of the arc going up rather than
-    // across. A Scout holding a direction key reaches nearly ten. Fly one of those arcs
-    // at a run and the bot sails over the landing and comes down somewhere the route
-    // does not mention, which is an off-route interruption and a blacklisted edge every
-    // single time - measured on koth_valley at 34 of each in about two minutes.
+    // A jump edge is flown as a *trajectory*, not as a speed. The generator validated
+    // one specific arc - leave the takeoff column, cover NAV_EDGE_BUCKET px of ground a
+    // tick, be over the landing when the arc comes back down - and every cell it
+    // checked for clearance, and every surface it ruled out as landing somewhere else,
+    // is about that arc and no other. So the bot's job in the air is to be where the
+    // plan says it should be by now, and the two things it needs for that are the
+    // planned speed and how long it has been flying.
     //
-    // NAV_EDGE_BUCKET is that required speed, recorded by the generator for exactly
-    // this. The floor of 1 is because it is stored rounded and a slow enough arc rounds
-    // to zero, which would mean never pressing anything and never arriving.
-    jumpEdge = true;
-    needVx = max(1, ds_grid_get(global.navEdges, NAV_EDGE_BUCKET, edgeRow));
+    // Holding a speed instead is what this used to do, and it is not the same thing:
+    // the bot starts from a standstill and takes four or five ticks to reach a slow
+    // arc's speed, which is most of a cell of ground lost with nothing to make it back,
+    // and any nudge in the air is permanent. Tracking a position corrects both, because
+    // being behind is a reason to press and being ahead is a reason to brake. Measured
+    // over every class, rise, ledge width and run-up: 12-19% of jumps landed on the node
+    // they were aimed at before, 100% after. (Both halves of that number matter - the
+    // other half is navJumpFlight no longer handing out arcs that were never going to
+    // land there anyway.)
+    //
+    // Ticks are counted rather than read off char.vspeed, which would otherwise give
+    // the phase of the arc for free: vspeed pins at 10 once the fall reaches terminal
+    // velocity, and every phase after that reads as the same tick.
+    needVx = ds_grid_get(global.navEdges, NAV_EDGE_BUCKET, edgeRow);
+    flightTicks = ds_grid_get(global.navEdges, NAV_EDGE_TICKS, edgeRow);
+    jumpDist = needVx * flightTicks;
+
+    // The generator's own direction, not the one inferred from node midpoints: it is
+    // the side of the takeoff column the landing is on, and a wide surface can straddle
+    // the midpoint test.
+    jumpDir = dirToNext;
+    if(n0 > takeoffCol)
+        jumpDir = 1;
+    else if(n1 < takeoffCol)
+        jumpDir = -1;
 
     if(char.onground)
     {
         if(abs(mx - takeoffCol) <= BOT_JUMP_LEAD)
         {
-            // Leaving the ground already faster than the arc allows cannot be corrected
-            // in the air: with no key held GG2 bleeds horizontal speed by about 13% a
-            // tick, so a bot arriving at 9 is still over 3 some eight ticks later, which
-            // is most of the flight. So brake on the takeoff column until the speed is
-            // one the arc was actually simulated at, then go.
-            if(abs(char.hspeed) <= needVx)
+            // Leaving the ground faster than the arc allows is worth avoiding even
+            // though the tracker can correct it: with no key held GG2 bleeds horizontal
+            // speed by only about 13% a tick, so a bot arriving at 9 is still over 3
+            // some eight ticks later. Brake on the takeoff column first.
+            //
+            // The extra pixel of tolerance is not slop. A steep arc can want less than
+            // 0.3px/tick, and a braking character oscillates either side of zero by
+            // about that much - the one thing that must not happen is a bot that brakes
+            // on the takeoff column forever, never satisfies the gate, and gets its own
+            // edge blacklisted by the stuck detector.
+            if(abs(char.hspeed) <= needVx + 1)
+            {
                 wantJump = true;
+                player.botAirTicks = 0;
+            }
             else
                 braking = true;
         }
         else
             targetCol = takeoffCol;
+    }
+    else
+    {
+        player.botAirTicks += 1;
+
+        // Where the plan says to be now, clamped at the landing so a bot that is late
+        // keeps pressing toward it rather than aiming past it.
+        jumpWantX = navColWorldX(takeoffCol)
+                  + jumpDir * min(jumpDist, needVx * player.botAirTicks);
+        tracking = true;
     }
 }
 
@@ -345,17 +383,22 @@ else if(dirToNext > 0)
 else if(dirToNext < 0)
     keys |= KEY_LEFT;
 
-// Hold the flown speed to what the edge asked for. Braking is a press against the
-// motion, the same way the arrival branch stops a bot rather than letting it coast;
-// otherwise it is enough to stop pressing, since the bot only ever accelerates while a
-// direction is held. Both replace the steering keys rather than adding to them, so the
-// bot cannot brake and steer in the same tick.
+// In the air on a jump edge, the planned trajectory replaces the steering entirely:
+// steering aims at a column to walk to, and there is no walking to be done. Behind the
+// plan is a press forward, ahead of it is a press back, which is a brake and is how a
+// player stops drifting too. The tolerance is a pixel because that is roughly what one
+// tick of a slow arc covers, and chattering the key either side of the line is exactly
+// what holds the average speed where it belongs.
 //
-// The cap is deliberately air-only. Capping the ground approach as well - so the bot
-// arrives at the takeoff already travelling at the arc's speed rather than accelerating
-// into it from a stop - sounds better and measured no better: three trials of the same
-// koth_valley climb came out at <90, 273 and 277 frames against 220 and 239 without it.
-// The takeoff speed is not what those jumps are losing to.
+// Braking on the ground is the same idea before the arc starts, and both replace the
+// steering keys rather than adding to them, so the bot cannot brake and steer in one
+// tick.
+//
+// Neither caps the *approach*. Braking on the way to the takeoff column - so the bot
+// arrives already travelling at the arc's speed rather than accelerating into it from a
+// stop - sounds better, measured no better on koth_valley (three trials at <90, 273 and
+// 277 frames against 220 and 239 without it), and measured no better again in the
+// offline model that produced the tracking law. It stays out.
 if(braking)
 {
     keys = keys & ~(KEY_LEFT | KEY_RIGHT);
@@ -364,8 +407,14 @@ if(braking)
     else if(char.hspeed < 0)
         keys |= KEY_RIGHT;
 }
-else if(jumpEdge and !char.onground and abs(char.hspeed) >= needVx)
+else if(tracking)
+{
     keys = keys & ~(KEY_LEFT | KEY_RIGHT);
+    if(char.x < jumpWantX - 1)
+        keys |= KEY_RIGHT;
+    else if(char.x > jumpWantX + 1)
+        keys |= KEY_LEFT;
+}
 
 if(wantJump)
 {

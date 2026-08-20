@@ -7,13 +7,13 @@
 /// surfaces reachable from spawn.
 ///
 /// The envelope is GG2's own jump, not a guess: baseJumpStrength 8.3 against gravity
-/// 0.6 per tick (F12), giving height above takeoff p(t) = v0*t - g*t*t/2. How long
-/// that arc lasts, and how fast it is flown, comes from navJumpFlight - which is where
-/// the difference between jumping up onto something and dropping down onto something
-/// lives, and it is not cosmetic. Checking a downward landing the upward way accepts
-/// every surface within horizontal reach and NAV_MAX_FALL rows below regardless of
-/// what is in between, because "arrives over it while at or above it" is true on the
-/// first tick of the arc (F41).
+/// 0.6 per tick (F12), giving height above takeoff navJumpHeight(t). How long that arc
+/// lasts, and how fast it is flown, comes from navJumpFlight, and the one rule behind
+/// both is that a jump ends where the arc comes back down - never where it first
+/// arrives over the target (that is true on the first tick of a drop) and never where
+/// it first arrives level with the target (that is true seventeen ticks before a steep
+/// climb lands). Both of those are F41, and the second of them was still here until
+/// the flight model was made one formula.
 ///
 /// NAV_JUMP_VX is Heavy's max speed, the slowest class (F12). One graph serves every
 /// class, so every edge in it has to be traversable by the worst of them; a Scout can
@@ -30,14 +30,12 @@
 /// exact arcs are the trajectory-fan work (F35) - but it catches jumps into ceilings,
 /// through walls, and onto surfaces that a nearer one shadows.
 ///
-/// Where the arc *starts* is a search rather than a given, and navJumpTakeoff owns both
-/// that search and the clearance walk above. Leaving from the very end of the run is the
-/// obvious choice and is wrong whenever the thing being jumped onto is also the thing
-/// that ends the run: the body is NAV_BOX_W wide and anchored at its left column, so at
-/// the end of the surface it is already flush against the obstacle and every arc is
-/// rejected on its first sample. That is not a rare corner - it is a bot trying to climb
-/// onto a crate - and on koth_valley it was the whole reason 257 of 270 nodes were
-/// unreachable from spawn.
+/// Where the arc *starts*, where on the target it aims, and how much climb the ceiling
+/// above the takeoff leaves it are all decided by navJumpTakeoff, which owns the search
+/// and the clearance walk together and hands the whole arc back through globals. This
+/// script does not re-derive any of it: two copies of that reasoning would agree by luck
+/// rather than by construction, and an edge whose recorded speed and duration describe a
+/// different arc from the one that was proven is F41's failure class exactly.
 ///
 /// gateGrid may be -1. When it is not, the arc of each edge that survives is sampled
 /// against it and the first gate crossed becomes the edge's gate code. This is the one
@@ -52,7 +50,7 @@
 
 var nodes, nodeCount, freeGrid, nodeGrid, gateGrid, rowStart, w, h, fromNode, toNode;
 var i, j, side, dir, ay, ax0, ax1, by, bx0, bx1, takeoff, xLand;
-var dCells, dWorld, tHit, vx, samples, cost, k, t, sx, sy, minRow, maxRow, ry, queue, kept;
+var dCells, tHit, vx, samples, cost, k, t, sx, sy, minRow, maxRow, ry, queue, kept;
 var srcGate, arcGate, cellGate;
 
 nodes = argument0;
@@ -126,11 +124,7 @@ for(i = fromNode; i < toNode; i += 1)
                     continue;
                 }
 
-                if(dir < 0)
-                    xLand = min(bx1, takeoff - 1);
-                else
-                    xLand = max(bx0, takeoff + 1);
-                dCells = abs(xLand - takeoff);
+                dCells = abs(global.navJumpLandCol - takeoff);
 
                 // Jumping is more expensive than walking the same ground, so a route
                 // that can walk will.
@@ -165,14 +159,14 @@ for(i = fromNode; i < toNode; i += 1)
         if(takeoff < 0)
             continue;
 
-        if(dir < 0)
-            xLand = min(bx1, takeoff - 1);
-        else
-            xLand = max(bx0, takeoff + 1);
+        // The whole arc comes back with the takeoff, not from a second derivation of
+        // this script's own. Which lead it could afford and how much climb the ceiling
+        // left it are both things only the clearance walk knows, and re-deriving them
+        // here would mean two copies of that reasoning agreeing by luck.
+        xLand = global.navJumpLandCol;
         dCells = abs(xLand - takeoff);
-        dWorld = dCells * NAV_CELL_SIZE;
-        tHit = navJumpFlight(ay, by, dCells);
-        vx = dWorld / tHit;
+        tHit = global.navJumpTicks;
+        vx = global.navJumpVx;
         cost = max(1, dCells) + NAV_JUMP_PENALTY;
 
         // Re-walk the arc for gates only now, rather than in the candidate loop: the
@@ -189,7 +183,7 @@ for(i = fromNode; i < toNode; i += 1)
 
                 t = tHit * k / samples;
                 sx = round(takeoff + dir * (vx * t) / NAV_CELL_SIZE);
-                sy = round(ay - (NAV_JUMP_V0 * t - NAV_JUMP_GRAVITY * t * t / 2) / NAV_CELL_SIZE);
+                sy = round(ay - navJumpHeight(t, global.navJumpCapH) / NAV_CELL_SIZE);
                 if(sx < 0 or sx > w - NAV_BOX_W or sy < 0 or sy > h - NAV_BOX_H)
                     continue;
 
@@ -201,10 +195,13 @@ for(i = fromNode; i < toNode; i += 1)
         if(arcGate == NAV_GATE_NONE)
             arcGate = ds_grid_get(nodes, NAV_NODE_GATE, j);
 
-        // The bucket is the horizontal speed this arc actually needs, which is
-        // NAV_JUMP_VX for a jump up or across and slower for a drop. A per-class
-        // relaxation later wants the requirement, not the cap.
-        navEdgeAdd(i, j, NAV_EDGE_JUMP, round(vx), round(tHit), cost, arcGate, takeoff);
+        // The bucket is the horizontal speed this arc needs and the ticks are how long
+        // it is in the air, and both go in **unrounded**. They are what the follower
+        // steers by - the planned position at tick n is takeoff + vx*n, and the arc
+        // ends at vx*ticks - so rounding them is not a tidy-up, it is throwing away
+        // the trajectory. A slow climb wants 0.54px/tick; round() calls that 1, an
+        // 85% error, which over a 22-tick flight is two cells past an 18px ledge.
+        navEdgeAdd(i, j, NAV_EDGE_JUMP, vx, tHit, cost, arcGate, takeoff);
         kept += 1;
     }
     ds_priority_destroy(queue);

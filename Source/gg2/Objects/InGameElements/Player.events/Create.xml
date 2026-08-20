@@ -43,6 +43,11 @@
     botLastX = 0;
     botLastY = 0;
     botJumpHeld = false;
+    // Ticks since this bot left the ground on a jump edge. The arc it was given is a
+    // position per tick, so following it needs to know which tick it is on; char.vspeed
+    // would say, right up until terminal velocity pins it and every later tick reads
+    // the same.
+    botAirTicks = 0;
     botBlacklist = -1;
     botBlacklistQ = -1;
     // Which edge last put the bot somewhere its route did not go, and how many times in
