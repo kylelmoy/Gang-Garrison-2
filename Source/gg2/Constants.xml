@@ -211,4 +211,6 @@
   <constant name="BOT_STEER_TOL" value="2"/>
   <constant name="BOT_ENTRY_LEAD" value="2"/>
   <constant name="BOT_JUMP_LEAD" value="1"/>
+  <constant name="BOT_OBJECTIVE_PERIOD" value="30"/>
+  <constant name="BOT_GOAL_RETARGET_DIST" value="48"/>
 </constants>

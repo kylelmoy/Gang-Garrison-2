@@ -16,6 +16,11 @@
 /// event_user(1) still fires every tick regardless, so pressedKeys/releasedKeys edge
 /// detection keeps working in between decisions (F3). The path follower depends on it:
 /// Character jumps on the rising edge of $80, not on the bit being held.
+///
+/// A third, coarser cadence decides *where* to walk: botObjectiveUpdate (M6) reads the
+/// game mode's objective and calls botSetGoal when it changes. Run it before
+/// botPathKeys so a freshly issued goal is already what this tick's movement plans
+/// against, instead of one tick behind.
 
 var player, char, decisionPeriod, tick, navKeys;
 player = argument0;
@@ -28,6 +33,9 @@ if(char == -1)
 
 decisionPeriod = 15;
 tick = frame;
+
+if((tick + player) mod BOT_OBJECTIVE_PERIOD == 0)
+    botObjectiveUpdate(player);
 
 navKeys = botPathKeys(player);
 

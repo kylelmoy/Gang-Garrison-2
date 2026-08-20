@@ -13,4 +13,5 @@
   <resource name="botPathPlan" type="RESOURCE"/>
   <resource name="botPathKeys" type="RESOURCE"/>
   <resource name="botInputUpdate" type="RESOURCE"/>
+  <resource name="botObjectiveUpdate" type="RESOURCE"/>
 </resources>
