@@ -288,7 +288,90 @@ for(i = CLASS_SCOUT; i <= CLASS_QUOTE; i += 1)
 for(i = CLASS_SCOUT; i <= CLASS_QUOTE; i += 1)
     test_assert_equals(true, botClassMinBand(i) < botClassRange(i) * BOT_SPOT_BAND);
 
-// --- botRoleAssign: one defender in every BOT_DEFEND_EVERY, by roster position ---------
+// --- botClassProfile: the per-class table every shared script now reads ----------------
+
+// Six per-class tests used to live inline in botCombatUpdate, botInputUpdate and
+// botObjectiveUpdate; they are all one lookup now, and this block is what keeps that
+// lookup honest. Nothing here re-states the table - asserting "the Medic heals" against a
+// script whose whole content is "the Medic heals" pins nothing. What is asserted is the
+// invariants the *callers* rely on, and the places where two independent tables have to
+// agree with each other.
+
+// Every flag field answers 0 or 1 for every class, including the classes nobody thinks
+// about. A caller treats these as booleans without checking, so a stray 2 or -1 from a
+// mistyped case would be a truthy value in a branch that is supposed to be off.
+var fields, f, fi, v;
+fields = ds_list_create();
+ds_list_add(fields, BOT_CP_POTSHOT);
+ds_list_add(fields, BOT_CP_HEALS);
+ds_list_add(fields, BOT_CP_SPLASH);
+ds_list_add(fields, BOT_CP_SPECIAL_FIRE);
+ds_list_add(fields, BOT_CP_AIRJUMP);
+ds_list_add(fields, BOT_CP_FOLLOW);
+for(fi = 0; fi < ds_list_size(fields); fi += 1)
+{
+    f = ds_list_find_value(fields, fi);
+    for(i = CLASS_SCOUT; i <= CLASS_QUOTE; i += 1)
+    {
+        v = botClassProfile(i, f);
+        test_assert_equals(true, v == 0 or v == 1);
+    }
+}
+ds_list_destroy(fields);
+
+// An unknown field is 0 rather than undefined, which is what lets a caller add a field
+// constant before the table has an opinion about it.
+test_assert_equals(0, botClassProfile(CLASS_SCOUT, 999));
+
+// The two tables that describe the same fact have to agree: aiming at a grounded target's
+// feet is only correct for a weapon whose blast can reach the shooter, and that same blast
+// is why botClassMinBand hands those classes BOT_SPLASH_SAFE. If one is edited and the
+// other is not, a class either self-damages or stops using splash properly, and neither
+// shows up as an error anywhere.
+for(i = CLASS_SCOUT; i <= CLASS_QUOTE; i += 1)
+{
+    if(botClassProfile(i, BOT_CP_SPLASH))
+        test_assert_equals(BOT_SPLASH_SAFE, botClassMinBand(i));
+}
+
+// A period of 0 is not a slower defender, it is `mod 0` - a hard error in botRoleAssign
+// on the first bot of that class to join.
+for(i = CLASS_SCOUT; i <= CLASS_QUOTE; i += 1)
+    test_assert_equals(true, botClassProfile(i, BOT_CP_DEFEND_EVERY) >= 1);
+
+// Every positioning mode is one of the four botObjectiveUpdate knows how to act on. An
+// unrecognised value there is silently "no opinion", so it would read as a class whose
+// tuning simply does nothing.
+for(i = CLASS_SCOUT; i <= CLASS_QUOTE; i += 1)
+{
+    v = botClassProfile(i, BOT_CP_SPOT_MODE);
+    test_assert_equals(true, v == BOT_SPOT_NONE or v == BOT_SPOT_STANDOFF
+                             or v == BOT_SPOT_CHOKE or v == BOT_SPOT_FLANK);
+
+    // A class that stands off has to have somewhere to stand: the near edge of its band is
+    // a fraction of the far edge and the far edge is a fraction of its own weapon range, so
+    // a class whose range was retuned downward could end up with the two crossed - and
+    // botGoalSpot returns -1 for an empty band, which reads as "no spot on this map"
+    // rather than as a tuning mistake.
+    if(v == BOT_SPOT_STANDOFF)
+    {
+        test_assert_equals(true,
+            max(botClassMinBand(i), 1) < botClassRange(i) * BOT_SPOT_BAND);
+        test_assert_equals(true, BOT_SPOT_NEAR_FRAC < 1);
+    }
+}
+
+// The classes whose job is to physically reach the objective must not have a spot mode at
+// all: a Scout caps at capStrength 2, twice everyone else's rate, and standing it off from
+// the point would turn off the single best reason to have one. botObjectiveUpdate's
+// carryGoal gate is the second line of defence here, not the first.
+test_assert_equals(BOT_SPOT_NONE, botClassProfile(CLASS_SCOUT, BOT_CP_SPOT_MODE));
+// A Medic never reaches this code - it follows an ally and returns early - so a spot mode
+// on it would be dead tuning that looks live.
+test_assert_equals(true, botClassProfile(CLASS_MEDIC, BOT_CP_FOLLOW));
+test_assert_equals(BOT_SPOT_NONE, botClassProfile(CLASS_MEDIC, BOT_CP_SPOT_MODE));
+
+// --- botRoleAssign: one defender in every N of a class's lean group --------------------
 
 // The bug this pins is a real one the first version of botRoleAssign had: counting a
 // bot's *team-mates* rather than its own position down the roster gives every bot on the
@@ -297,6 +380,11 @@ for(i = CLASS_SCOUT; i <= CLASS_QUOTE; i += 1)
 // stated so that they do not depend on how many bots the roster already held - any six
 // consecutive positions contain exactly two multiples of three, wherever they start, and
 // the two are always BOT_DEFEND_EVERY apart. Under the old bug the count is 6 or 0.
+//
+// The probes are Soldiers rather than the Player default: the period is per class now, and
+// the default class is CLASS_SCOUT, which is one of the two deliberately defence-averse
+// ones. A Soldier is on the shared default period, so this block still measures exactly
+// what it measured before the class term existed.
 var roles, bots, defenders, firstDef, lastDef, k;
 bots = ds_list_create();
 for(k = 0; k < 6; k += 1)
@@ -304,6 +392,7 @@ for(k = 0; k < 6; k += 1)
     probe = instance_create(0, 0, Player);
     probe.isBot = true;
     probe.team = TEAM_RED;
+    probe.class = CLASS_SOLDIER;
     ds_list_add(global.players, probe);
     ds_list_add(bots, probe);
 }
@@ -348,6 +437,70 @@ for(k = 0; k < 6; k += 1)
 test_assert_equals(string_copy(roles, 1, 6), string_copy(roles, 7, 6));
 
 for(k = 0; k < 6; k += 1)
+{
+    probe = ds_list_find_value(bots, k);
+    ds_list_delete(global.players, ds_list_find_index(global.players, probe));
+    with(probe)
+        instance_destroy();
+}
+ds_list_destroy(bots);
+
+// --- the lean groups are counted separately, which is the whole class term -------------
+
+// Twelve bots alternating Engineer and Scout. Engineers are on BOT_DEFEND_KEEN and Scouts
+// on BOT_DEFEND_AVERSE, so the six Engineers must produce 6/KEEN defenders and the six
+// Scouts 6/AVERSE, whatever the roster already held - any six consecutive positions in a
+// period-N group contain exactly 6/N multiples of N, the same argument the block above
+// makes for period 3.
+//
+// Interleaving them is the point. If the count were over the whole team rather than over
+// the bots sharing this bot's period, the Engineers would land on roster positions 0, 2,
+// 4, 6, 8, 10 and (position + 1) mod 2 would be 1 for every single one of them: zero
+// Engineer defenders, which is the exact inversion of what the class term is for, on the
+// composition it is most obviously meant to help.
+var engDef, scoutDef;
+bots = ds_list_create();
+for(k = 0; k < 12; k += 1)
+{
+    probe = instance_create(0, 0, Player);
+    probe.isBot = true;
+    probe.team = TEAM_RED;
+    if((k mod 2) == 0)
+        probe.class = CLASS_ENGINEER;
+    else
+        probe.class = CLASS_SCOUT;
+    ds_list_add(global.players, probe);
+    ds_list_add(bots, probe);
+}
+
+engDef = 0;
+scoutDef = 0;
+for(k = 0; k < 12; k += 1)
+{
+    probe = ds_list_find_value(bots, k);
+    botRoleAssign(probe);
+    if(probe.botRole == BOT_ROLE_DEFEND)
+    {
+        if(probe.class == CLASS_ENGINEER)
+            engDef += 1;
+        else
+            scoutDef += 1;
+    }
+}
+test_assert_equals(6 / BOT_DEFEND_KEEN, engDef);
+test_assert_equals(6 / BOT_DEFEND_AVERSE, scoutDef);
+
+// Both ends of the composition range still split. The failure the period model exists to
+// avoid is a rule that vetoes by class instead of pacing by class: "Engineers defend,
+// Scouts attack" leaves an all-Engineer team with nobody attacking and an all-Scout team
+// with nobody defending, and botPopulationUpdate picks a class with irandom(8), so it can
+// produce either.
+test_assert_equals(true, engDef > 0);
+test_assert_equals(true, engDef < 6);
+test_assert_equals(true, scoutDef > 0);
+test_assert_equals(true, scoutDef < 6);
+
+for(k = 0; k < 12; k += 1)
 {
     probe = ds_list_find_value(bots, k);
     ds_list_delete(global.players, ds_list_find_index(global.players, probe));

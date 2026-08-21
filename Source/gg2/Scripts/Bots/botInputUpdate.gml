@@ -136,7 +136,8 @@ if(char.onground)
     else if(player.botTarget != noone and random(1) < 0.01)
         evadeKeys |= KEY_JUMP;
 }
-else if(player.class == CLASS_SCOUT and !player.botFlyingEdge and !player.botAirJumpUsed)
+else if(botClassProfile(player.class, BOT_CP_AIRJUMP)
+        and !player.botFlyingEdge and !player.botAirJumpUsed)
 {
     // The Scout's second jump, as evasion (M7 4.1): erratic by design, which is what makes
     // it hard to lead. Three gates, and each one is load-bearing:

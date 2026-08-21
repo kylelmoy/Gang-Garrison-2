@@ -30,7 +30,9 @@ ServerPlayerChangeclass(playerId, player.class, global.sendBuffer);
 
 // Attack or defend, plus the per-bot goal spread and route seed that make this bot's
 // version of a shared objective differ from its team-mates' (M7 tier 3). After the team
-// is set, because it counts the team it is joining.
+// *and* the class are set: it counts the team it is joining, and how often a bot of this
+// class defends is a per-class number (botClassProfile). Note that the class it counts
+// with is the one checkClasslimits handed back, not the one asked for.
 botRoleAssign(player);
 
 if(team != TEAM_SPECTATOR)

@@ -1,4 +1,4 @@
-/// botGoalSpot(char, tx, ty, minDist, maxDist, needLOS, highBonus)
+/// botGoalSpot(char, tx, ty, minDist, maxDist, losSense, highBonus)
 /// Finds the nav node this bot should stand on in order to *do something to* (tx, ty),
 /// and returns its index - or -1 if no node in the graph qualifies. The chosen node's
 /// own stand position is published in global.botSpotX/global.botSpotY, next-call
@@ -17,6 +17,16 @@
 ///
 /// Expressed as a goal *predicate* those are one function with different arguments, and
 /// building it once is the whole point: the alternative is three near-copies that drift.
+///
+/// losSense is one of BOT_LOS_ANY / BOT_LOS_NEED / BOT_LOS_AVOID, and it was a boolean
+/// until the per-class goals needed the third value. AVOID asks for a node that *cannot*
+/// see the anchor, which is the Spy's flank: near enough to the objective to walk in from,
+/// out of sight of whoever is guarding it. It is the same line-of-sight test with the
+/// answer inverted, so it costs the same and is bounded by the same BOT_SPOT_TRIES.
+///
+/// ⚠️ BOT_LOS_NEED is 1, so the old boolean call sites kept working unchanged - which is
+/// exactly why they were all updated to name the constant instead. A future fourth sense
+/// would not be so lucky.
 ///
 /// The search is botFindTarget's shape rather than a scan: score every candidate cheaply,
 /// then pay for the expensive test (line of sight) only on the best ones, best-first, and
@@ -43,15 +53,15 @@
 /// to the plain objective point for a while instead. A goal that resolves is not a route
 /// that exists, and this script only promises the first half.
 
-var char, tx, ty, minDist, maxDist, needLOS, highBonus;
-var queue, n, ny, nx0, nx1, col, tcol, sx, sy, dTarget, rank, cand, tries, best, mid;
+var char, tx, ty, minDist, maxDist, losSense, highBonus;
+var queue, n, ny, nx0, nx1, col, tcol, sx, sy, dTarget, rank, cand, tries, best, mid, wrong;
 
 char = argument0;
 tx = argument1;
 ty = argument2;
 minDist = argument3;
 maxDist = argument4;
-needLOS = argument5;
+losSense = argument5;
 highBonus = argument6;
 
 // Publish the anchor itself as the fallback, so a caller that ignores the -1 return still
@@ -118,12 +128,17 @@ while(best < 0 and !ds_priority_empty(queue))
     sx = navColWorldX(col);
     sy = (ny + NAV_BOX_H) * NAV_CELL_SIZE - 23;
 
-    if(!needLOS)
+    if(losSense == BOT_LOS_ANY)
         best = cand;
     else
     {
         tries += 1;
-        if(!collision_line_bulletblocking(sx, sy, tx, ty))
+        // `wrong` is "this candidate has the sightline the caller did not ask for", which
+        // is a blocked line for NEED and a clear one for AVOID.
+        wrong = collision_line_bulletblocking(sx, sy, tx, ty);
+        if(losSense == BOT_LOS_AVOID)
+            wrong = !wrong;
+        if(!wrong)
             best = cand;
         else if(tries >= BOT_SPOT_TRIES)
             break;

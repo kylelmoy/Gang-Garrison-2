@@ -264,5 +264,25 @@
   <constant name="BOT_PUSH_DIST" value="400"/>
   <constant name="BOT_MEDIC_FOLLOW_RANGE" value="700"/>
   <constant name="BOT_MEDIC_OFFSET" value="60"/>
+  <constant name="BOT_CP_POTSHOT" value="0"/>
+  <constant name="BOT_CP_HEALS" value="1"/>
+  <constant name="BOT_CP_SPLASH" value="2"/>
+  <constant name="BOT_CP_SPECIAL_FIRE" value="3"/>
+  <constant name="BOT_CP_AIRJUMP" value="4"/>
+  <constant name="BOT_CP_FOLLOW" value="5"/>
+  <constant name="BOT_CP_DEFEND_EVERY" value="6"/>
+  <constant name="BOT_CP_SPOT_MODE" value="7"/>
+  <constant name="BOT_CP_SPOT_HIGH" value="8"/>
+  <constant name="BOT_SPOT_NONE" value="0"/>
+  <constant name="BOT_SPOT_STANDOFF" value="1"/>
+  <constant name="BOT_SPOT_CHOKE" value="2"/>
+  <constant name="BOT_SPOT_FLANK" value="3"/>
+  <constant name="BOT_LOS_ANY" value="0"/>
+  <constant name="BOT_LOS_NEED" value="1"/>
+  <constant name="BOT_LOS_AVOID" value="2"/>
+  <constant name="BOT_DEFEND_KEEN" value="2"/>
+  <constant name="BOT_DEFEND_AVERSE" value="6"/>
+  <constant name="BOT_SPOT_NEAR_FRAC" value="0.5"/>
+  <constant name="BOT_SPOT_HIGH_SNIPER" value="3"/>
   <constant name="NAV_PATH_JITTER" value="0.35"/>
 </constants>

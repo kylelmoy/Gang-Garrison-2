@@ -120,6 +120,30 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
   `v0*t - g*t²/2` is not an approximation here. Past terminal velocity it is: `vspeed` clamps at
   10px/tick, which a jump reaches after 30.5 ticks, and ignoring that underestimates the deepest
   drops the graph allows by 15% — which becomes a 15% *over*estimate of the speed the arc needs.
+- **A goal offset must be applied *after* the objective resolves to a node, not before.**
+  `botNodeSnap` searches *downward*, so snapping an already-offset position can land several
+  storeys below the objective — the offset steps off the edge of the platform the intel is on and
+  the search falls all the way to the ground floor, and the bot then walks confidently somewhere
+  with nothing to do with its objective. The objective's own node resolves first and an offset snap
+  is accepted only within a body height of it. Any future "nudge the goal" feature has this trap.
+- **Two behaviours that each move a bot away from its objective will silently compose.** Once your
+  team holds a point, an attacker walks out toward the enemy spawn and takes *that* ground; a class
+  with its own positioning opinion stands somewhere else again. Running both left the Spy's flank
+  anchored 400px from the objective, so the sightline it was carefully avoiding was to somewhere
+  the objective was not — measured 243px out with a *clear* line to the point, the exact opposite
+  of what was asked. Neither half looks wrong on its own. They are two answers to the same
+  question, so exactly one of them may apply.
+- **Not every anchor is a thing you shoot at.** `botGoalSpot`'s line-of-sight test is right for an
+  objective and wrong for a waypoint: an Engineer's chokepoint is a bare point on a route between
+  two places and can land inside a wall or above a roof. On `koth_valley` only 6 of 26 in-band
+  nodes had a clear line to it, so the best-first search spent its whole `BOT_SPOT_TRIES` budget
+  and returned nothing — and the Engineer fell back to standing on the very point it was supposed
+  to be covering. Proximity was the whole requirement; that is what `BOT_LOS_ANY` is for.
+- **A positioning behaviour must never override a goal the bot has to physically reach.** The CTF
+  intel is *picked up*, so a class that stops short of it and waits never captures — and since
+  `botPopulationUpdate` picks with `irandom(8)`, a whole team can roll that class and the round
+  simply never ends. Standing off is only ever correct for an objective that is covered, held or
+  shot.
 - **Almost nothing in GG2 is hitscan.** Only the Sniper Rifle is true hitscan; every other weapon
   (including Scattergun, Shotgun, Minigun, Revolver) drops with per-tick gravity. A bot's aim
   solver needs drop compensation on all of them, not just the obviously-lobbed Minegun — a `Shot`
@@ -240,6 +264,81 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
     eaten only when hurt, airblast held back at 10 ammo and fired at 200, a mine detonated only
     with an enemy on it, and the Spy's four cloak states. `Scripts/Unit tests/botskill/` covers the
     knob table, the error formula, the leading ladder and the class bands in 88 assertions.
-  - **Not yet implemented**: Demoman sticky-jumping, Engineer sentry *placement* strategy (it
-    builds where it stands), Spy flanking routes, and field of view as a difficulty knob. Bots also
-    do not yet target sentries, only Characters.
+  - **Not yet implemented as of M6**: Demoman sticky-jumping, Engineer sentry *placement* strategy
+    (it builds where it stands), Spy flanking routes, and field of view as a difficulty knob. Bots
+    also do not yet target sentries, only Characters. M7 and M8 below close the placement and
+    flanking items; the rest stand.
+- **M7** — the first human playtest's backlog, in four tiers. Tiers 1-3 implemented and verified;
+  tier 4 investigated and deliberately declined.
+  - **Tier 1, the small-diff/large-effect findings**: target gravity in the aim solve; target
+    memory across a lost line of sight (a peek that breaks LOS for under a second keeps its target,
+    so ducking back out costs nothing and re-emerging does not re-pay the whole acquire/fire
+    chain); facing the direction of travel when there is nothing to aim at; a real goal during the
+    30-60s KOTH/DKOTH/Arena lock-in instead of standing frozen at spawn; Sniper charge-gating;
+    jump-to-dodge and a low-rate evasive hop; and wandering near an already-captured point instead
+    of freezing on it forever. Also a difficulty rebalance: aim error compressed hard (12/6/2.5/0.7
+    degrees to 4/1.5/0.5/0.2) and leading ungated from skill, because GG2's projectiles are slow
+    and a target can reverse direction in one tick, so evasion already supplies the miss rate a
+    hitscan game needed aim error for — stacking both spent the difficulty budget twice.
+  - **Tier 2, nav-graph reachability**: 8 of 24 shipped maps had an objective no bot could path to.
+    All 8 fixed, in four changes, each re-audited across all 24 cached graphs with no regression.
+    (1) `navJumpTakeoff`'s search was anchored at the source run's own end, which is only correct
+    when the target lies beyond that end; it is now anchored at the column nearest the target,
+    clamped into the source's span. (2) and (3) `NAV_JUMP_MAX_PER_SIDE`, a "keep the cheapest N
+    landings per source/direction" cap meant to fight redundant-link explosion, was discarding the
+    *only* edge connecting a 115-node region to the rest of the graph, because cheaper
+    mutually-redundant local hops filled the quota first. Raised 3→4, and `navJumpEdges` now keeps
+    one bonus slot past the quota for whichever remaining candidate is cheapest *and* lands more
+    than `NAV_JUMP_DIVERSITY_ROWS` from every already-kept landing — targeting "reaches somewhere
+    different" directly rather than hoping a bigger cutoff happens to reach deep enough.
+    (4) `NAV_MAX_FALL` was 40 rows: tuned for the ordinary case and never stress-tested against a
+    map built around one deliberately extreme drop. Raised to 150 rows (900px) after confirming GG2
+    has no fall damage anywhere in `Character`'s Step event.
+  - **Tier 3, the goal layer** (`botGoalSpot.gml`, `botSetGoalNode.gml`, `botNodeSnap.gml`,
+    `botClassMinBand.gml`, `botRoleAssign.gml`, `botEnemySpawn.gml`): implemented and verified. The
+    one new idea is a goal expressed as a **predicate over nodes** rather than a world point:
+    `botGoalSpot(char, tx, ty, minDist, maxDist, losSense, highBonus)` answers "where do I stand in
+    order to do something to that", ranked cheaply over every node and paying for
+    `collision_line_bulletblocking` only on the best `BOT_SPOT_TRIES` of them. Four separate
+    findings wanted the same thing and none of them wanted a point: a firing position on a
+    generator (which is *shot*, not stood on — at 2100 hp that is a sustained-fire job from range,
+    and bots had never damaged one before, because `botFindTarget` iterated `with(Character)` and
+    nothing else), ground overlooking a point we already hold, pushing past a captured objective
+    toward the enemy, and the Medic's follow position. On top of it, `botRoleAssign` splits a team
+    into attackers and defenders — nothing in the bot code distinguished the two before, which is
+    why every mode read the same way, the whole team running at the enemy objective in single file
+    with nobody behind them.
+  - **Tier 4 was declined, and three of its four items build nothing.** The Demoman's "instant
+    detonation" is *correct behaviour*, confirmed by measuring mine lifetimes live (4-23 ticks,
+    every detonation with an enemy inside the blast): the mine is a direct-fire projectile that
+    lands beside the target it was aimed at, so trap-laying is a new feature, not a repair.
+    Double-jump and rocket-jump nav edges: no shipped map needs one, and rocket-jump would break
+    the "combat owns ATTACK, navigation owns movement" invariant three scripts rely on.
+- **M8** — per-class strategy: implemented and verified live.
+  - **`botClassProfile(class, field)`** (`Scripts/Bots/botClassProfile.gml`) is the single home for
+    every per-class fact not already owned by a named table script. Six per-class tests used to sit
+    inline in shared scripts — four in `botCombatUpdate`, one each in `botInputUpdate` and
+    `botObjectiveUpdate` — each defensible where it sat, but collectively "what does a Pyro do
+    differently" was a four-file grep. `botClassRange`, `botClassMinBand`, `botClassKeys` and
+    `botServerActions` were deliberately left alone: each is named for its one question and read
+    from several places, so folding them in would trade four clear names for four more field
+    constants. A class's knowledge now lives in exactly five places and `botClassProfile`'s own
+    header is the index to all five.
+  - **Class-aware roles**: the class supplies *N* in "one bot in every N defends" (2 for
+    Engineer/Heavy, 3 default, 6 for Scout/Spy) rather than vetoing the answer outright. The
+    obvious rule — "Engineers defend, Scouts attack" — breaks at both ends and both ends are
+    reachable, since `botPopulationUpdate` picks a class with `irandom(8)`: an all-Engineer team
+    would have nobody attacking and an all-Scout team nobody defending. With every class on the
+    default period it reduces exactly to the pre-M8 behaviour.
+  - **Per-class positioning**: four modes on top of `botGoalSpot` — a Sniper and a Heavy stand off
+    from the objective inside their own weapon's reach, an Engineer takes a chokepoint on the route
+    between the objective and the enemy spawn, and a Spy stages *out of sight of* the objective.
+    Bands are derived from `botClassRange` rather than written out per class, so they stay correct
+    when a weapon's reach is retuned. The Spy's flank needed `botGoalSpot`'s `needLOS` boolean
+    generalised into a `BOT_LOS_ANY`/`NEED`/`AVOID` sense.
+  - **Verified live** on `koth_valley` and `ctf_truefort`: a defending Sniper takes a position
+    352px back with a clear sightline to the point, a Heavy 305px back and high, an Engineer a
+    chokepoint on the route out of its own base, and a Spy a spot 152px from the objective with no
+    line to it. `Scripts/Unit tests/botskill/` grew to 246 assertions.
+  - **Still not implemented**: Demoman sticky-jumping, field of view as a difficulty knob, bots
+    targeting sentries, per-class route costs, and per-class difficulty knobs.

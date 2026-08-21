@@ -34,4 +34,5 @@
   <resource name="botGoalSpot" type="RESOURCE"/>
   <resource name="botRoleAssign" type="RESOURCE"/>
   <resource name="botEnemySpawn" type="RESOURCE"/>
+  <resource name="botClassProfile" type="RESOURCE"/>
 </resources>

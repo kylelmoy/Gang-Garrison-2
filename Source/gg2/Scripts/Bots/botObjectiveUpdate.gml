@@ -28,6 +28,22 @@
 ///   spread   a per-bot lateral offset (botSpreadX) so a team does not converge on one
 ///            pixel and then stand in each other's line of fire (M7 2.4).
 ///
+/// Per-class positioning is the fifth of those and rides on the same `spot` machinery. A
+/// class with a BOT_CP_SPOT_MODE does not walk at the objective the way everyone else
+/// does - a Sniper perches back from it, an Engineer builds on the route to it, a Spy
+/// stages out of sight of it - and each of those is one call to botGoalSpot with a
+/// different band, height weight and line-of-sight sense. botClassProfile owns which class
+/// wants which; this script owns when that opinion is allowed to apply, which is the part
+/// that needs to know about the game mode.
+///
+/// ⚠️ The gate on that is "would standing off lose the round", and it is not decoration.
+/// The objective in CTF is a thing to *pick up*: a class that stops 300px short of the
+/// enemy intel and waits never captures, and if a whole team happens to roll that class -
+/// botPopulationUpdate picks with irandom(8), so it can - the round simply never ends. So
+/// a spot mode never overrides a goal the bot has to physically reach, and the classes
+/// whose job *is* reaching it (a Scout at capStrength 2, twice everyone else's cap rate)
+/// have no spot mode in the first place.
+///
 /// Reissuing the goal is deliberately cheap to skip: botSetGoal forces an immediate
 /// re-plan (M5), so calling it every tick with an unchanged destination would fight the
 /// replan timer the path follower was built around. botSetGoalNode owns that test - a
@@ -41,10 +57,10 @@
 /// oscillates between the two forever at 30-tick intervals. A distance test is stable
 /// because the spot it chooses is itself inside the radius that chose it.
 
-var player, char, wx, wy, found, anchorX, anchorY, useSpot, held;
-var spotMin, spotMax, spotHigh, spotNode, snapNode, spreadX;
+var player, char, wx, wy, found, anchorX, anchorY, useSpot, held, carryGoal;
+var spotMin, spotMax, spotHigh, spotLOS, spotMode, classWants, spotNode, snapNode, spreadX;
 var ownBase, enemyFlag, targetGen, enemyPoint, bestDist, cpTarget, zoneCp, defending;
-var ally, foe, spawn, pushLen, pushX, pushY;
+var ally, foe, spawn, pushLen, pushX, pushY, wantPush;
 
 player = argument0;
 char = player.object;
@@ -75,7 +91,7 @@ if(player.botGoalIsSpot and player.botHasGoal and player.botPath < 0)
 // BOT_GOAL_RETARGET_DIST gives the re-issue throttle for free: a moving ally naturally
 // trips the 48px test, which is exactly the case that check was written for, while an ally
 // standing still does not and the goal is left alone.
-if(player.class == CLASS_MEDIC and !char.intel)
+if(botClassProfile(player.class, BOT_CP_FOLLOW) and !char.intel)
 {
     ally = botFindAlly(char, BOT_MEDIC_FOLLOW_RANGE);
     if(ally != noone)
@@ -112,11 +128,13 @@ if(player.class == CLASS_MEDIC and !char.intel)
 found = false;
 useSpot = false;
 held = false;
+carryGoal = false;
 anchorX = 0;
 anchorY = 0;
 spotMin = 0;
 spotMax = 0;
 spotHigh = 0;
+spotLOS = BOT_LOS_NEED;
 defending = (player.botRole == BOT_ROLE_DEFEND);
 
 if(instance_exists(IntelligenceBase) or instance_exists(Intelligence))
@@ -164,6 +182,9 @@ if(instance_exists(IntelligenceBase) or instance_exists(Intelligence))
             wx = enemyFlag.x;
             wy = enemyFlag.y;
             found = true;
+            // The one goal in the game that has to be walked into rather than merely
+            // covered, which is what forbids a per-class standoff below.
+            carryGoal = true;
         }
     }
 }
@@ -328,6 +349,57 @@ else if(instance_exists(ControlPoint))
 if(!found)
     exit;
 
+// --- does this bot's class want to stand somewhere other than the objective? -----------
+//
+// Decided before the hold/push block because the Engineer's chokepoint and the attacker's
+// push are the same offset - out toward where the enemy will come from - and computing it
+// once is what keeps the two from drifting apart. They are mutually exclusive at runtime
+// (a chokepoint is a defender's goal and the push is an attacker's), so nothing here has
+// to choose between them.
+spotMode = botClassProfile(player.class, BOT_CP_SPOT_MODE);
+classWants = false;
+if(spotMode != BOT_SPOT_NONE and !char.intel)
+{
+    if(spotMode == BOT_SPOT_STANDOFF)
+    {
+        // Only where the objective is something to cover rather than to reach: guarding
+        // it, holding it once it is ours, or shooting it (the generator, which already
+        // wanted a firing position). An attacker walking at a point nobody holds yet is
+        // doing the one job a standoff cannot do.
+        classWants = (defending or held or useSpot);
+    }
+    else if(spotMode == BOT_SPOT_CHOKE)
+        classWants = defending;
+    else if(spotMode == BOT_SPOT_FLANK)
+        classWants = !carryGoal;
+}
+
+// A class with its own positioning opinion does not also take the generic push. They are
+// two answers to the same question - "stand somewhere other than on the objective" - and
+// applying both silently anchors the class's answer on the other one's output: the Spy's
+// flank came out measured from a point 400px advanced toward the enemy spawn, so the
+// sightline it was avoiding was to somewhere the objective was not. Caught live; nothing
+// about it looks wrong in the code, since both halves are individually doing their job.
+wantPush = (held and !defending and !classWants)
+           or (classWants and spotMode == BOT_SPOT_CHOKE);
+pushX = 0;
+pushY = 0;
+if(wantPush)
+{
+    spawn = botEnemySpawn(player.team, wx, wy);
+    if(spawn != noone)
+    {
+        pushX = (spawn.x - wx) * BOT_PUSH_FRAC;
+        pushY = (spawn.y - wy) * BOT_PUSH_FRAC;
+        pushLen = point_distance(0, 0, pushX, pushY);
+        if(pushLen > BOT_PUSH_DIST)
+        {
+            pushX = pushX * BOT_PUSH_DIST / pushLen;
+            pushY = pushY * BOT_PUSH_DIST / pushLen;
+        }
+    }
+}
+
 // --- the point is already ours: hold it, or push past it ------------------------------
 //
 // Arrival is a state, not a terminus (M7 2.1). A capture zone never moves, so without
@@ -360,20 +432,62 @@ if(held)
     }
     else
     {
-        spawn = botEnemySpawn(player.team, wx, wy);
-        if(spawn != noone)
-        {
-            pushX = (spawn.x - wx) * BOT_PUSH_FRAC;
-            pushY = (spawn.y - wy) * BOT_PUSH_FRAC;
-            pushLen = point_distance(0, 0, pushX, pushY);
-            if(pushLen > BOT_PUSH_DIST)
-            {
-                pushX = pushX * BOT_PUSH_DIST / pushLen;
-                pushY = pushY * BOT_PUSH_DIST / pushLen;
-            }
-            wx += pushX;
-            wy += pushY;
-        }
+        wx += pushX;
+        wy += pushY;
+    }
+}
+
+// --- per-class positioning -------------------------------------------------------------
+//
+// The class's opinion replaces whatever band the shared logic arrived at, because the two
+// are answers to the same question and the class one is the more specific: a defending
+// Heavy told to stand within BOT_HOLD_RADIUS of the point and a defending Heavy told to
+// hold high ground 190-375px off it are not two goals to combine, they are one goal at two
+// levels of detail.
+//
+// The band is derived from botClassRange rather than written out per class, so it stays
+// correct when a weapon's reach is retuned: the far edge is the same BOT_SPOT_BAND
+// fraction the generator branch already uses (comfortably inside reach, not on the edge of
+// it, where a target taking one step is out of range) and the near edge is a fraction of
+// that. The floor under both is botClassMinBand, so a standoff can never put a bot inside
+// its own splash radius.
+if(classWants)
+{
+    anchorX = wx;
+    anchorY = wy;
+    spotMax = botClassRange(player.class) * BOT_SPOT_BAND;
+    spotMin = max(botClassMinBand(player.class), 1);
+    spotHigh = botClassProfile(player.class, BOT_CP_SPOT_HIGH);
+    spotLOS = BOT_LOS_NEED;
+    useSpot = true;
+
+    if(spotMode == BOT_SPOT_STANDOFF)
+        spotMin = max(spotMin, spotMax * BOT_SPOT_NEAR_FRAC);
+    else if(spotMode == BOT_SPOT_CHOKE)
+    {
+        // The anchor moves, not the bot: a chokepoint is a place on the route between what
+        // is being guarded and where the attack comes from, so the sentry covers the
+        // approach instead of the thing itself. Same offset as an attacker's push, and
+        // capped the same way for the same reason - a sentry built on the enemy's doorstep
+        // is a sentry that is not guarding anything.
+        anchorX += pushX;
+        anchorY += pushY;
+
+        // ...and unlike every other anchor in this script, that one is a bare point on a
+        // route rather than an object. Asking for a sightline to it is asking the wrong
+        // question - nothing is going to be shot *at* the chokepoint, the sentry covers
+        // whatever walks through it - and the point can perfectly well land inside a wall
+        // or above a roof, at which case almost nothing can see it. Measured on
+        // koth_valley: 26 nodes in the band and only 6 with a clear line, so the
+        // best-first search spent its whole BOT_SPOT_TRIES budget and returned nothing,
+        // and the Engineer fell back to standing on the point it was supposed to be
+        // covering. Proximity is the whole requirement here.
+        spotLOS = BOT_LOS_ANY;
+    }
+    else if(spotMode == BOT_SPOT_FLANK)
+    {
+        // Near the objective but with no sightline to it: the approach nobody is watching.
+        spotLOS = BOT_LOS_AVOID;
     }
 }
 
@@ -381,7 +495,7 @@ if(held)
 
 if(useSpot and GameServer.frame >= player.botSpotBanUntil)
 {
-    spotNode = botGoalSpot(char, anchorX, anchorY, spotMin, spotMax, true, spotHigh);
+    spotNode = botGoalSpot(char, anchorX, anchorY, spotMin, spotMax, spotLOS, spotHigh);
     if(spotNode >= 0)
     {
         botSetGoalNode(player, spotNode, global.botSpotX, true);

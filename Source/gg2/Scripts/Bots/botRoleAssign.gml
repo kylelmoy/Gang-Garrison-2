@@ -1,6 +1,6 @@
 /// botRoleAssign(player)
-/// Gives one bot an attacking or a defending role, by counting how many bots its team
-/// already has: every BOT_DEFEND_EVERY-th one defends and the rest attack.
+/// Gives one bot an attacking or a defending role by counting positions down the roster:
+/// every Nth bot defends and the rest attack, where N comes from the bot's own class.
 ///
 /// Nothing in the bot code distinguished attacking from defending before this (M7 6.3),
 /// which is why every mode read the same way - the entire team running at the enemy
@@ -17,6 +17,23 @@
 /// Counting rather than rolling a die is deliberate: with three bots on a team, a 1-in-3
 /// roll gives all-attack about 30% of the time, and "the split sometimes just does not
 /// happen" is not a thing anyone can debug from a screenshot.
+///
+/// The class term is the period N, not a veto, and that distinction is the whole design.
+/// The obvious rule - "Engineers and Heavies defend, Scouts and Spies attack" - breaks at
+/// both ends: a team of nine Engineers would have nobody attacking and a team of nine
+/// Scouts nobody defending, and both are compositions botPopulationUpdate can produce,
+/// since it picks a class with irandom(8). Making the class choose *how often* instead
+/// keeps a split at every composition: an all-Engineer team runs half defenders, an
+/// all-Scout team one in six, and a mixed team draws its defenders disproportionately from
+/// the classes suited to it. With every class on BOT_DEFEND_EVERY it reduces exactly to the
+/// old behaviour.
+///
+/// ⚠️ The count is over the bots that share this bot's *period*, not over the whole team.
+/// Counting the whole team would make the period meaningless in a mixed team - two
+/// Engineers separated by four Scouts would sit at positions 0 and 5 and neither would land
+/// on a multiple of 2. Sharing a period is what makes a lean group: Engineer and Heavy
+/// count together as one defensive pool, Scout and Spy as one offensive pool, everyone else
+/// as the third, which is also why this reads botClassProfile rather than the class itself.
 ///
 /// ⚠️ What is counted is this bot's *position among its team's bots in the roster*, not
 /// how many team-mates it has. The difference is the whole correctness of the rule: a
@@ -37,10 +54,11 @@
 /// paints, answers a ping and does nothing. It cost one build here. gg2_lint does not
 /// catch this one: it checks the built-in *variable* list, and `other` is not on it.
 
-var player, i, mate, place;
+var player, i, mate, place, every;
 
 player = argument0;
 place = 0;
+every = botClassProfile(player.class, BOT_CP_DEFEND_EVERY);
 
 for(i = 0; i < ds_list_size(global.players); i += 1)
 {
@@ -53,10 +71,12 @@ for(i = 0; i < ds_list_size(global.players); i += 1)
         continue;
     if(mate.team != player.team)
         continue;
+    if(botClassProfile(mate.class, BOT_CP_DEFEND_EVERY) != every)
+        continue;
     place += 1;
 }
 
-if(((place + 1) mod BOT_DEFEND_EVERY) == 0)
+if(((place + 1) mod every) == 0)
     player.botRole = BOT_ROLE_DEFEND;
 else
     player.botRole = BOT_ROLE_ATTACK;

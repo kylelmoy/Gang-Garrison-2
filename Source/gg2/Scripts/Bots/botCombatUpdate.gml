@@ -150,7 +150,7 @@ if(target == noone and (tick + player) mod BOT_TARGET_PERIOD == 0)
     // pure ammo waste that also lights up exactly where it is standing; and off for the
     // Medic, whose primary is a heal beam and whose needles at long range are the same
     // deal.
-    if(target == noone and player.class != CLASS_PYRO and player.class != CLASS_MEDIC
+    if(target == noone and botClassProfile(player.class, BOT_CP_POTSHOT)
        and random(1) < BOT_POTSHOT_CHANCE)
     {
         target = botFindTarget(char, range * BOT_POTSHOT_MULT);
@@ -177,7 +177,7 @@ if(target == noone and (tick + player) mod BOT_TARGET_PERIOD == 0)
 
 subject = target;
 subjectIsAlly = false;
-if(player.class == CLASS_MEDIC)
+if(botClassProfile(player.class, BOT_CP_HEALS))
 {
     if((tick + player) mod BOT_TARGET_PERIOD == 0)
         player.botAlly = botFindAlly(char, BOT_HEAL_RANGE);
@@ -292,7 +292,7 @@ if(tick >= player.botAimAt)
     if(!player.botTargetIsGen)
     {
         if(player.botSplashAim and subject.onground
-           and (player.class == CLASS_SOLDIER or player.class == CLASS_DEMOMAN))
+           and botClassProfile(player.class, BOT_CP_SPLASH))
             aimY += BOT_FEET_OFFSET;
     }
 
@@ -345,7 +345,7 @@ if(!subjectIsAlly and (!canFire or !settled or player.botHoldFire))
     // A Medic shooting at an enemy is firing needles, and needles are on SPECIAL rather
     // than ATTACK - so for that one class SPECIAL is the trigger and has to answer to the
     // same gates. Every other class's SPECIAL is a reflex and deliberately does not.
-    if(player.class == CLASS_MEDIC)
+    if(botClassProfile(player.class, BOT_CP_SPECIAL_FIRE))
         keys = keys & ~KEY_SPECIAL;
 }
 
