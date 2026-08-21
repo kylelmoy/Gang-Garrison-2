@@ -28,4 +28,10 @@
   <resource name="botServerActions" type="RESOURCE"/>
   <resource name="botAimSpread" type="RESOURCE"/>
   <resource name="botAngleDelta" type="RESOURCE"/>
+  <resource name="botClassMinBand" type="RESOURCE"/>
+  <resource name="botNodeSnap" type="RESOURCE"/>
+  <resource name="botSetGoalNode" type="RESOURCE"/>
+  <resource name="botGoalSpot" type="RESOURCE"/>
+  <resource name="botRoleAssign" type="RESOURCE"/>
+  <resource name="botEnemySpawn" type="RESOURCE"/>
 </resources>

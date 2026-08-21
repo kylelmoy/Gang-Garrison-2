@@ -195,7 +195,7 @@
   <constant name="NAV_BUILD_DONE" value="9"/>
   <constant name="NAV_BUILD_MOVEBOX" value="10"/>
   <constant name="NAV_BUILD_EDGE_NODES" value="8"/>
-  <constant name="NAV_MAX_FALL" value="40"/>
+  <constant name="NAV_MAX_FALL" value="150"/>
   <constant name="NAV_JUMP_V0" value="8.3"/>
   <constant name="NAV_JUMP_GRAVITY" value="0.6"/>
   <constant name="NAV_JUMP_VX" value="4.53"/>
@@ -203,7 +203,8 @@
   <constant name="NAV_JUMP_MAX_TICKS" value="60"/>
   <constant name="NAV_JUMP_SAMPLES" value="10"/>
   <constant name="NAV_JUMP_PENALTY" value="6"/>
-  <constant name="NAV_JUMP_MAX_PER_SIDE" value="3"/>
+  <constant name="NAV_JUMP_MAX_PER_SIDE" value="4"/>
+  <constant name="NAV_JUMP_DIVERSITY_ROWS" value="6"/>
   <constant name="NAV_JUMP_TAKEOFF_TRIES" value="4"/>
   <constant name="NAV_JUMP_LAND_LEAD" value="2"/>
   <constant name="BOT_REPLAN_TICKS" value="45"/>
@@ -242,4 +243,26 @@
   <constant name="BOT_ZOOM_RANGE" value="400"/>
   <constant name="BOT_UNZOOM_RANGE" value="250"/>
   <constant name="BOT_EAT_HP_FRACTION" value="0.5"/>
+  <constant name="BOT_ROLE_ATTACK" value="0"/>
+  <constant name="BOT_ROLE_DEFEND" value="1"/>
+  <constant name="BOT_DEFEND_EVERY" value="3"/>
+  <constant name="BOT_DEFEND_RADIUS" value="220"/>
+  <constant name="BOT_SPOT_TRIES" value="12"/>
+  <constant name="BOT_SPOT_BAND" value="0.75"/>
+  <constant name="BOT_SPOT_HIGH_BONUS" value="1.5"/>
+  <constant name="BOT_HOLD_RADIUS" value="260"/>
+  <constant name="BOT_SPREAD_MAX" value="96"/>
+  <constant name="BOT_MIN_ENGAGE" value="40"/>
+  <constant name="BOT_POTSHOT_MULT" value="1.7"/>
+  <constant name="BOT_POTSHOT_CHANCE" value="0.12"/>
+  <constant name="BOT_REGROUP_TICKS" value="90"/>
+  <constant name="BOT_REGROUP_MATES" value="2"/>
+  <constant name="BOT_REGROUP_RADIUS" value="300"/>
+  <constant name="BOT_DOUBLEJUMP_CHANCE" value="0.05"/>
+  <constant name="BOT_GEN_THREAT" value="4000"/>
+  <constant name="BOT_PUSH_FRAC" value="0.4"/>
+  <constant name="BOT_PUSH_DIST" value="400"/>
+  <constant name="BOT_MEDIC_FOLLOW_RANGE" value="700"/>
+  <constant name="BOT_MEDIC_OFFSET" value="60"/>
+  <constant name="NAV_PATH_JITTER" value="0.35"/>
 </constants>

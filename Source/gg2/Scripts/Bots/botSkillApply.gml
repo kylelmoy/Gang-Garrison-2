@@ -36,8 +36,14 @@
 ///                                   turn-speed ladder). Tracking lag, overshoot and
 ///                                   settling all fall out of these two numbers - no
 ///                                   smoothing filter, and it is the CPU throttle too.
-/// - botAimErrorDeg     12/6/2.5/0.7 half-width of the uniform angular error (UT 30 deg
-///                                   to under 1, scaled for a 2D game).
+/// - botAimErrorDeg     4/1.5/0.5/0.2  half-width of the uniform angular error. Compressed
+///                                   hard from the UT-sourced 12/6/2.5/0.7 (M7 3.4):
+///                                   GG2's projectiles are slow and a target can reverse
+///                                   direction in one tick, so evasion already supplies
+///                                   the miss rate a hitscan game like UT needed aim error
+///                                   for. Aim error stacked on top just spent the
+///                                   difficulty budget twice; the four latency gates above
+///                                   are left untouched; they are what is still working.
 /// - botAimConeDeg      20/10/4/1    extra error immediately after acquiring, decaying
 ///                                   by BOT_AIM_CONE_DECAY per tick (CS:GO's
 ///                                   AimFocusInitial / AimFocusDecay).
@@ -46,9 +52,13 @@
 /// - botHoldFireChance  0.35/0.15/0.05/0  chance a legal shot is not taken, which is
 ///                                   Q3's firethrottle: a weak bot hesitates rather than
 ///                                   spraying, and hesitation is legible.
-/// - botLeadMode        0/1/1/2      0 solves drop only, 1 leads a moving target with
-///                                   one linear pass, 2 runs the full iterated solve
-///                                   (Q3 gates leading on aim_skill 0.4 and 0.8).
+/// - botLeadMode        2/2/2/2      always the full iterated solve (M7 3.4). Q3 gates
+///                                   leading on aim_skill 0.4 and 0.8, but under-leading
+///                                   is not a legible difficulty signal to a player - it
+///                                   just reads as a bad shot, and it was what made tier 4
+///                                   read as worse than tier 3 (both BOT_LEAD_LINEAR, so
+///                                   tier 4's only visible difference was a faster turn
+///                                   rate closing on a shot it still wasn't leading).
 /// - botSplashAim       off/off/on/on  aim at a grounded target's feet with a splash
 ///                                   weapon (Q3 gates this at aim_skill > 0.6).
 ///
@@ -69,17 +79,13 @@ with(player)
     botPerceiveTicks  = max(1, floor(botSkillLerp(skill, 15, 10, 5, 1) + 0.5));
     botAimInterval    = max(1, floor(botSkillLerp(skill, 8, 5, 3, 2) + 0.5));
     botTurnRate       = botSkillLerp(skill, 6, 7.5, 9, 24);
-    botAimErrorDeg    = botSkillLerp(skill, 12, 6, 2.5, 0.7);
+    botAimErrorDeg    = botSkillLerp(skill, 4, 1.5, 0.5, 0.2);
     botAimConeDeg     = botSkillLerp(skill, 20, 10, 4, 1);
     botMoveErrMult    = botSkillLerp(skill, 1, 0.6, 0.4, 0.3);
     botHoldFireChance = botSkillLerp(skill, 0.35, 0.15, 0.05, 0);
 
-    if(skill < 0.3)
-        botLeadMode = BOT_LEAD_NONE;
-    else if(skill < 0.85)
-        botLeadMode = BOT_LEAD_LINEAR;
-    else
-        botLeadMode = BOT_LEAD_FULL;
+    // Every tier gets the full iterated solve now (M7 3.4) - see the knob table above.
+    botLeadMode = BOT_LEAD_FULL;
 
     botSplashAim = (skill >= 0.6);
 }

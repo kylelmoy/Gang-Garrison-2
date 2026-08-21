@@ -531,6 +531,84 @@ ds_grid_destroy(freeGrid);
 ds_grid_destroy(solidGrid);
 
 // ---------------------------------------------------------------------------
+// A target whose own span sits INSIDE the source's, not past either end of it -
+// koth_corinth's ramp, as M7 tier 2 found it.
+//
+// A wide ground run, and a shelf floating above it - solid one row thick, so it
+// does not touch the ground and the ground stays one contiguous node under and
+// past both of the shelf's edges. The shelf's own footprint casts a low ceiling
+// directly beneath it (capHeight 6px there - nowhere near enough to clear a 9-row
+// climb) while the ground is wide open everywhere else. Both of the old fixed
+// anchors (the run's far left end, the run's far right end) sit deep inside that
+// open stretch, tens of columns from the shelf - not blocked by the ceiling at
+// all, just aimed at a landing column so far past the shelf's own bx0..bx1 that
+// navJumpLanding always refused it. The only takeoffs that land correctly are
+// the one or two columns immediately beside the shelf, which neither end-anchored
+// search ever tried. This is exactly koth_corinth's platform-to-ramp edge, scaled
+// down to a case small enough to assert against directly.
+// ---------------------------------------------------------------------------
+w = 50;
+h = 45;
+solidGrid = ds_grid_create(w, h);
+ds_grid_clear(solidGrid, 0);
+ds_grid_set_region(solidGrid, 0, 35, w - 1, h - 1, 1);   // ground, top at row 35
+ds_grid_set_region(solidGrid, 22, 26, 26, 26, 1);        // floating shelf, top at row 26
+
+freeGrid = navClearanceBuild(solidGrid, w, h);
+nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
+
+groundNode = -1;
+crateNode = -1;
+for(ei = 0; ei < global.navNodeCount; ei += 1)
+{
+    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 28)
+        groundNode = ei;
+    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 19)
+        crateNode = ei;
+}
+test_assert_equals(true, groundNode >= 0);
+test_assert_equals(true, crateNode >= 0);
+
+gx0 = ds_grid_get(nodes, NAV_NODE_X0, groundNode);
+gx1 = ds_grid_get(nodes, NAV_NODE_X1, groundNode);
+cx0 = ds_grid_get(nodes, NAV_NODE_X0, crateNode);
+cx1 = ds_grid_get(nodes, NAV_NODE_X1, crateNode);
+
+// The shelf's span is strictly inside the ground's - the case the fixed anchors
+// could never reach, and the point of this test.
+test_assert_equals(true, gx0 < cx0);
+test_assert_equals(true, cx1 < gx1);
+
+nodeGrid = navNodeGrid(nodes, global.navNodeCount, w, h);
+takeoffCol = navJumpTakeoff(freeGrid, nodeGrid, 28, gx0, gx1,
+                            19, cx0, cx1, 1, w, h, crateNode);
+test_assert_equals(true, takeoffCol >= 0);
+// The takeoff the search finds is beside the shelf, not at either end of the
+// 40-plus-column run it searched - a landing column check alone would not tell
+// the anchor apart from a coincidence.
+test_assert_equals(true, takeoffCol < cx0);
+test_assert_equals(true, takeoffCol > gx0 + 5);
+test_assert_equals(true, global.navJumpLandCol >= cx0);
+test_assert_equals(true, global.navJumpLandCol <= cx1);
+
+edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
+hasClimb = false;
+for(ei = 0; ei < global.navEdgeCount; ei += 1)
+{
+    if(ds_grid_get(edges, NAV_EDGE_FROM, ei) == groundNode
+       and ds_grid_get(edges, NAV_EDGE_TO, ei) == crateNode
+       and ds_grid_get(edges, NAV_EDGE_TYPE, ei) == NAV_EDGE_JUMP)
+        hasClimb = true;
+}
+test_assert_equals(true, hasClimb);
+
+ds_grid_destroy(edges);
+ds_grid_destroy(nodeGrid);
+ds_grid_destroy(nodes);
+ds_grid_destroy(freeGrid);
+ds_grid_destroy(solidGrid);
+
+// ---------------------------------------------------------------------------
 // A surface far below is not reachable just because it is under the takeoff.
 //
 // This is F41 as geometry. An upper ledge, a block partway down and to the left, and
@@ -601,7 +679,7 @@ if(variable_global_exists("navEdgeIdx"))
 global.navEdgeIdx = testIdx;
 global.navReady = true;
 
-path = navFindPath(0, 2, TEAM_RED, false, -1);
+path = navFindPath(0, 2, TEAM_RED, false, -1, 0);
 test_assert_equals(true, path >= 0);
 test_assert_equals(3, ds_list_size(path));
 ds_list_destroy(path);
@@ -869,7 +947,7 @@ global.navReady = true;
 // Three surfaces, and every one reachable from every other.
 test_assert_equals(3, global.navNodeCount);
 
-path = navFindPath(0, 2, TEAM_RED, false, -1);
+path = navFindPath(0, 2, TEAM_RED, false, -1, 0);
 test_assert_equals(true, path >= 0);
 test_assert_equals(3, ds_list_size(path));
 test_assert_equals(0, ds_list_find_value(path, 0));
@@ -877,13 +955,112 @@ test_assert_equals(2, ds_list_find_value(path, 2));
 ds_list_destroy(path);
 
 // A path to itself is one node, not zero and not a loop.
-path = navFindPath(1, 1, TEAM_RED, false, -1);
+path = navFindPath(1, 1, TEAM_RED, false, -1, 0);
 test_assert_equals(1, ds_list_size(path));
 ds_list_destroy(path);
 
 // Out of range asks are refused rather than clamped.
-test_assert_equals(-1, navFindPath(0, 99, TEAM_RED, false, -1));
-test_assert_equals(-1, navFindPath(-1, 0, TEAM_RED, false, -1));
+test_assert_equals(-1, navFindPath(0, 99, TEAM_RED, false, -1, 0));
+test_assert_equals(-1, navFindPath(-1, 0, TEAM_RED, false, -1, 0));
+
+// --- route variety: a per-bot cost jitter (M7 1.4) ------------------------------------
+//
+// The jitter must never change what a path *is* - only which of several equally valid
+// ones a given bot prefers. So the two things worth pinning are that a jittered search
+// still returns a real path from the start to the goal, and that the same seed returns
+// the identical one every time: the seed is a Player id, the same bot re-plans every
+// BOT_REPLAN_TICKS, and a jitter that moved between calls would re-route a bot mid-walk
+// for no reason at all, which is the failure mode the deterministic hash exists to
+// prevent. (An RNG-based jitter passes every other test here and fails exactly this one.)
+var jitPath, jitPath2, jitIdx;
+
+jitPath = navFindPath(0, 2, TEAM_RED, false, -1, 12345);
+test_assert_equals(true, jitPath >= 0);
+test_assert_equals(0, ds_list_find_value(jitPath, 0));
+test_assert_equals(2, ds_list_find_value(jitPath, ds_list_size(jitPath) - 1));
+
+jitPath2 = navFindPath(0, 2, TEAM_RED, false, -1, 12345);
+test_assert_equals(ds_list_size(jitPath), ds_list_size(jitPath2));
+for(jitIdx = 0; jitIdx < ds_list_size(jitPath); jitIdx += 1)
+    test_assert_equals(ds_list_find_value(jitPath, jitIdx), ds_list_find_value(jitPath2, jitIdx));
+ds_list_destroy(jitPath);
+ds_list_destroy(jitPath2);
+
+// A different seed is still a valid path. On a graph this small every route is the same
+// route, so what is asserted is validity rather than difference - the difference only has
+// somewhere to show up on a map with real alternatives, and asserting it here would be
+// asserting something about this fixture instead of about the code.
+jitPath = navFindPath(0, 2, TEAM_BLUE, false, -1, 99);
+test_assert_equals(true, jitPath >= 0);
+test_assert_equals(0, ds_list_find_value(jitPath, 0));
+test_assert_equals(2, ds_list_find_value(jitPath, ds_list_size(jitPath) - 1));
+ds_list_destroy(jitPath);
+
+// --- botGoalSpot: "a place from which I can do X" (M7 tier 3) --------------------------
+//
+// The goal layer's contract has two halves and only one of them is about geometry:
+//
+//   1. whatever node comes back, the position published alongside it must resolve *back*
+//      to that same node through navNodeFromWorld. Everything downstream depends on it -
+//      botSetGoalNode issues the goal from that position, botPathPlan resolves it to a
+//      goal node, and the follower checks arrival against it. A spot that resolves to a
+//      neighbouring node is a bot that walks to the wrong surface and never arrives.
+//   2. the spot is inside the band it was asked for. That is what makes it a *firing*
+//      position rather than just a nearby node.
+//
+// needLOS is false throughout, because line of sight is a room-collision question and
+// this fixture is three ds_grids with no room behind them (F33).
+var spotNode, spotAnchorX, spotAnchorY, spotIdx, spotCol, spotX, spotY, spotD;
+
+spotAnchorX = navColWorldX((ds_grid_get(nodes, NAV_NODE_X0, 1) + ds_grid_get(nodes, NAV_NODE_X1, 1)) div 2);
+spotAnchorY = (ds_grid_get(nodes, NAV_NODE_Y, 1) + NAV_BOX_H) * NAV_CELL_SIZE - 23;
+
+spotNode = botGoalSpot(id, spotAnchorX, spotAnchorY, 0, 100000, false, 0);
+test_assert_equals(true, spotNode >= 0);
+test_assert_equals(spotNode, navNodeFromWorld(global.botSpotX, global.botSpotY));
+
+// The band is a filter at *both* ends, and it is asked here one node at a time: for each
+// node, work out where botGoalSpot would stand on it and how far that is from the anchor,
+// then ask for a band one pixel either side of exactly that distance. Every such band is
+// non-empty by construction, and what comes back must be inside it.
+//
+// Written this way rather than with a hard-coded threshold on purpose. The first version
+// asserted "further than 60px" against this fixture and failed, because a node's span is
+// in *anchor* columns - narrower than the solid run under it by most of NAV_BOX_W - so the
+// three platforms sit closer together than their solid extents suggest. Deriving the band
+// from the graph tests the contract instead of the fixture's arithmetic, and it also stays
+// correct if the platforms above are ever moved.
+for(spotIdx = 0; spotIdx < global.navNodeCount; spotIdx += 1)
+{
+    spotCol = navAnchorCol(spotAnchorX);
+    if(spotCol < ds_grid_get(nodes, NAV_NODE_X0, spotIdx))
+        spotCol = ds_grid_get(nodes, NAV_NODE_X0, spotIdx);
+    else if(spotCol > ds_grid_get(nodes, NAV_NODE_X1, spotIdx))
+        spotCol = ds_grid_get(nodes, NAV_NODE_X1, spotIdx);
+    spotX = navColWorldX(spotCol);
+    spotY = (ds_grid_get(nodes, NAV_NODE_Y, spotIdx) + NAV_BOX_H) * NAV_CELL_SIZE - 23;
+    spotD = point_distance(spotX, spotY, spotAnchorX, spotAnchorY);
+
+    spotNode = botGoalSpot(id, spotAnchorX, spotAnchorY, max(0, spotD - 1), spotD + 1, false, 0);
+    test_assert_equals(true, spotNode >= 0);
+    test_assert_equals(true,
+        abs(point_distance(global.botSpotX, global.botSpotY, spotAnchorX, spotAnchorY) - spotD) <= 1);
+    test_assert_equals(spotNode, navNodeFromWorld(global.botSpotX, global.botSpotY));
+}
+
+// An empty band answers -1 rather than the nearest thing to it. The caller's whole
+// fallback path (botObjectiveUpdate walking to the objective itself) hangs on this being
+// a refusal and not a best effort.
+test_assert_equals(-1, botGoalSpot(id, spotAnchorX, spotAnchorY, 100000, 200000, false, 0));
+
+// A degenerate band is refused rather than clamped, for the same reason.
+test_assert_equals(-1, botGoalSpot(id, spotAnchorX, spotAnchorY, 100, 100, false, 0));
+
+// On a -1 the published position is the anchor itself, not whatever the previous call
+// left behind: a caller that ignores the return value gets something usable rather than
+// a stale spot from a different query.
+test_assert_equals(spotAnchorX, global.botSpotX);
+test_assert_equals(spotAnchorY, global.botSpotY);
 
 global.navReady = false;
 global.navEdgeIdx = oldIdx;
@@ -996,7 +1173,7 @@ global.navEdgeIdx = testIdx;
 global.navReady = true;
 
 // A red bot walks its own gate: floor, gate, floor.
-path = navFindPath(0, 2, TEAM_RED, false, -1);
+path = navFindPath(0, 2, TEAM_RED, false, -1, 0);
 test_assert_equals(true, path >= 0);
 test_assert_equals(3, ds_list_size(path));
 test_assert_equals(1, ds_list_find_value(path, 1));
@@ -1004,13 +1181,13 @@ ds_list_destroy(path);
 
 // The same bot carrying the intel may not take its own gate out, and there is no way
 // round on this map.
-test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, true, -1));
+test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, true, -1, 0));
 
 // Neither may a blue bot - including by the jump that hops the gate node.
-test_assert_equals(-1, navFindPath(0, 2, TEAM_BLUE, false, -1));
+test_assert_equals(-1, navFindPath(0, 2, TEAM_BLUE, false, -1, 0));
 
 // But a blue bot that somehow starts inside the gate can still get out of it.
-path = navFindPath(1, 2, TEAM_BLUE, false, -1);
+path = navFindPath(1, 2, TEAM_BLUE, false, -1, 0);
 test_assert_equals(true, path >= 0);
 test_assert_equals(2, ds_list_size(path));
 ds_list_destroy(path);

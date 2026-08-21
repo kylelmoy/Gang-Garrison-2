@@ -36,6 +36,12 @@ player = argument0;
 char = player.object;
 keys = 0;
 
+// Cleared up front and set only by the in-flight branch below, so every early return
+// leaves it false. botInputUpdate's evasion behaviours read it: a bot part-way through a
+// jump edge is flying a position-per-tick trajectory the generator validated, and an
+// extra jump or a step in the air permanently ruins it (M6 part 5).
+player.botFlyingEdge = false;
+
 if(char == -1)
 {
     botPathFree(player);
@@ -363,6 +369,7 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
         jumpWantX = navColWorldX(takeoffCol)
                   + jumpDir * min(jumpDist, needVx * player.botAirTicks);
         tracking = true;
+        player.botFlyingEdge = true;
     }
 }
 

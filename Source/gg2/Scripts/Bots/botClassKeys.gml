@@ -15,9 +15,13 @@
 /// press and release it - which is why the cloak branch throttles itself through
 /// botCloakAt rather than returning the bit every tick.
 ///
-/// Minimum bands exist for one reason: self-harm. A Rocket's explosion has a 65 px
-/// radius and a Mine's is similar, so a Soldier or Demoman that fires at something
-/// standing on top of it kills itself. Everything else fires from zero.
+/// Minimum bands live in botClassMinBand, which is botClassRange's counterpart: that one
+/// owns the outer edge of the firing band, this one reads the inner edge from there. The
+/// gate here is self-harm - a Rocket's explosion has a 65 px radius and a Mine's is
+/// similar, so a Soldier or Demoman that fires at something standing on top of it kills
+/// itself. botClassMinBand also carries a much smaller floor for everyone else, which is
+/// about the aim solve degenerating at zero separation rather than about damage (M7 2.4),
+/// and which botInputUpdate - not this script - acts on by backing the bot away.
 ///
 /// v1 simplifications, matching the plan's open questions: no sticky-jumping, no
 /// deliberate Spy flanking, and the Engineer builds where it stands rather than choosing
@@ -44,12 +48,12 @@ switch(player.class)
     case CLASS_SOLDIER:
         // Rockets fly flat and hurt whoever is standing next to the impact, including
         // the shooter.
-        if(subject != noone and dist >= BOT_SPLASH_SAFE)
+        if(subject != noone and dist >= botClassMinBand(CLASS_SOLDIER))
             keys |= KEY_ATTACK;
         break;
 
     case CLASS_DEMOMAN:
-        if(subject != noone and dist >= BOT_SPLASH_SAFE)
+        if(subject != noone and dist >= botClassMinBand(CLASS_DEMOMAN))
             keys |= KEY_ATTACK;
 
         // SPECIAL detonates every mine this bot has out at once, so it is worth pressing
@@ -67,7 +71,7 @@ switch(player.class)
         // spending it on empty air.
         if(instance_exists(weapon))
         {
-            if(weapon.ammoCount >= 40 and botIncomingProjectile(char, BOT_AIRBLAST_RANGE))
+            if(weapon.ammoCount >= 40 and botIncomingProjectile(char, BOT_AIRBLAST_RANGE, false))
                 keys |= KEY_SPECIAL;
         }
         break;
@@ -112,8 +116,33 @@ switch(player.class)
         }
         break;
 
+    case CLASS_SNIPER:
+        // The charge trades time for damage - baseDamage 45 at t=0 up to maxDamage 75 at
+        // a full chargeTime (105 ticks/3.5s), on a sqrt curve where half the charge
+        // already buys most of the difference (Rifle's own Begin Step). Firing at t=0,
+        // which is what the shared default branch below does for every class including
+        // this one, throws away up to 40% of the shot's damage on every single shot (M7
+        // 3.7) - zoom (botServerActions) already gets a bot into range and charging; this
+        // is the other half, actually waiting for the charge before pulling the trigger.
+        // Only applies with the Rifle out - the melee and secondary have no charge to
+        // wait for, so they fall through to the shared default's shoot-on-sight cases.
+        if(subject != noone)
+        {
+            if(instance_exists(weapon) and weapon.object_index == Rifle)
+            {
+                // Scale the wait with distance: a target out near botClassRange is not
+                // closing fast enough to punish a full charge, one much closer is close
+                // to a melee problem by the time a full charge would land.
+                if(weapon.t >= weapon.chargeTime * min(1, dist / botClassRange(CLASS_SNIPER)))
+                    keys |= KEY_ATTACK;
+            }
+            else
+                keys |= KEY_ATTACK;
+        }
+        break;
+
     default:
-        // Scout, Sniper, Heavy, Engineer and Quote all just shoot: their whole band is
+        // Scout, Heavy, Engineer and Quote all just shoot: their whole band is
         // botClassRange, and the caller has already checked it.
         if(subject != noone)
             keys |= KEY_ATTACK;

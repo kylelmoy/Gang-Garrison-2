@@ -1,4 +1,4 @@
-/// navFindPath(startNode, goalNode, team, hasIntel, blocked)
+/// navFindPath(startNode, goalNode, team, hasIntel, blocked, jitterSeed)
 /// A* over the built nav graph, for a character of `team` carrying the intel or not.
 /// Returns a ds_list of node indices from startNode to goalNode inclusive, or -1 if
 /// the goal is unreachable or the graph is not ready. The caller owns the returned
@@ -40,9 +40,25 @@
 /// and A* stays admissible. Fall edges are charged their drop height, which is at
 /// least the straight-line distance they cover vertically, so they do not break it
 /// either.
+///
+/// `jitterSeed` is route variety (M7 1.4), and 0 turns it off - which is what every
+/// non-bot caller and the whole unit suite pass, so a jittered search is opt-in and the
+/// deterministic one is still exactly the search it always was. Non-zero perturbs each
+/// edge's cost by up to NAV_PATH_JITTER of itself, as a pure function of (edge, seed):
+/// the same bot always gets the same answer for the same query, and two bots get
+/// different ones. That is most of what stops a team looking like a single-file column,
+/// for a fraction of the cost of the honest version (k-shortest paths, or real map
+/// knowledge).
+///
+/// The jitter only ever *raises* a cost, never lowers one, and that is deliberate rather
+/// than incidental: the heuristic is a straight-line lower bound on the unjittered cost,
+/// so costs that only grow keep it admissible and A* keeps returning an optimal path -
+/// optimal with respect to this bot's own slightly different idea of what things cost.
+/// A jitter that could subtract would break that quietly, and a broken heuristic does not
+/// look like a bug, it looks like a bot occasionally taking a stupid route.
 
-var startNode, goalNode, team, hasIntel, blocked, openSet, gScore, cameFrom, closed;
-var current, nb, e, eStart, eCount, i, tentative, path, guard;
+var startNode, goalNode, team, hasIntel, blocked, jitterSeed, openSet, gScore, cameFrom, closed;
+var current, nb, e, eStart, eCount, i, tentative, path, guard, cost, hash;
 var gx, gy, cx, cy, nx, ny;
 
 startNode = argument0;
@@ -50,6 +66,7 @@ goalNode = argument1;
 team = argument2;
 hasIntel = argument3;
 blocked = argument4;
+jitterSeed = argument5;
 
 if(!global.navReady)
     return -1;
@@ -120,7 +137,22 @@ while(!ds_priority_empty(openSet))
                 continue;
         }
 
-        tentative = ds_grid_get(gScore, 0, current) + ds_grid_get(global.navEdges, NAV_EDGE_COST, i);
+        cost = ds_grid_get(global.navEdges, NAV_EDGE_COST, i);
+        if(jitterSeed != 0)
+        {
+            // Knuth multiplicative hashing on the edge row, offset by the seed, read out
+            // of the middle bits rather than the low ones - the low bits of a single
+            // multiply barely move between consecutive i, which would give neighbouring
+            // edges near-identical jitter and defeat the whole point. Every intermediate
+            // here stays well inside a double's exact-integer range (the largest is about
+            // 5e13 against 9e15), so this is exact arithmetic rather than something that
+            // drifts between two calls with the same arguments.
+            hash = ((i + 1) * 2654435761 + jitterSeed * 40503) mod 4294967296;
+            hash = (hash div 65536) mod 256;
+            cost = cost * (1 + NAV_PATH_JITTER * hash / 255);
+        }
+
+        tentative = ds_grid_get(gScore, 0, current) + cost;
         e = ds_grid_get(gScore, 0, nb);
         if(e >= 0 and e <= tentative)
             continue;

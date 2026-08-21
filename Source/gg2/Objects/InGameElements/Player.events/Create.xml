@@ -60,6 +60,55 @@
     botReplanNear = 0;
     botAttackKeys = 0;
 
+    // Bot goal-layer and team-role state (milestone 7 tier 3). A goal used to be a world
+    // point and nothing else; these are what let it also be "a place from which I can do
+    // X" - a firing position on a generator, ground overlooking a point we already hold,
+    // a spot beside the ally a Medic is following.
+    //
+    // botRole splits a team into attackers and defenders, which nothing in the bot code
+    // distinguished before: every bot in every mode ran at the enemy objective. It is
+    // assigned once per bot (botRoleAssign) rather than per tick, so a defender stays a
+    // defender for a whole round and the split reads as team composition instead of as
+    // indecision.
+    botRole = BOT_ROLE_ATTACK;
+    // A per-bot lateral offset applied to a shared objective, so a team of bots does not
+    // converge on one pixel (M7 2.4) - derived from the Player id, so it is constant for
+    // this bot's whole life and different from its team-mates'.
+    botSpreadX = 0;
+    // The seed navFindPath perturbs its edge costs with (M7 1.4). Non-zero means "this
+    // bot prefers slightly different routes to everyone else"; 0 disables it, which is
+    // what every non-bot caller and the unit suite pass.
+    botRouteSeed = 0;
+    // Whether the current goal came out of botGoalSpot rather than being the objective
+    // itself, and until when spot goals are not to be tried again. botGoalSpot cannot
+    // check reachability (it would cost an A* per candidate), so a spot in another
+    // component presents as a goal that never plans - which, left alone, is a bot frozen
+    // at spawn. Noticing that once and falling back to the plain objective for a while is
+    // what keeps the goal layer from being able to make things worse than not having it.
+    botGoalIsSpot = false;
+    botSpotBanUntil = 0;
+    // Whether botTarget is a Generator rather than a Character. Almost every field the
+    // combat brain reads off a target - cloak, onground, player.class - only exists on a
+    // Character, so this is the flag that keeps those reads off a generator (M7 6.3).
+    botTargetIsGen = false;
+    // Set when the current target was acquired by the long-range potshot roll (M7 3.5),
+    // which widens the band the target is allowed to stay valid in - otherwise the shot
+    // would be taken and the target dropped again on the very next tick.
+    botPotshot = false;
+    // Held at the spawn point for a moment after respawning so bots arrive in clumps
+    // rather than in single file (M7 5.1). botAliveLast is only here to spot the
+    // dead -> alive transition; nothing else needs it.
+    botAliveLast = false;
+    botRegroupUntil = 0;
+    // A Scout's second, mid-air jump (M7 4.1). Edge-triggered like every other jump, and
+    // spent once per airborne period so it cannot be fired twice on one arc.
+    botAirJumpUsed = false;
+    // Set by botPathKeys while it is flying a jump edge's planned trajectory. Nothing may
+    // touch the movement keys during that - the arc is a position per tick that the
+    // generator validated, and any nudge in the air is permanent (M6 part 5) - so this is
+    // what the evasion behaviours in botInputUpdate check before adding a press.
+    botFlyingEdge = false;
+
     // Bot combat and difficulty state (milestone 6). botSkillApply writes the knobs from
     // one skill scalar when the bot is created; the defaults here are what a Player that
     // is not a bot keeps, and are the expert end of every knob so that a missing
@@ -80,6 +129,12 @@
     // fire delay and the focus cone are all measured from botTargetAt.
     botTarget = noone;
     botTargetAt = 0;
+    // Whether the target is currently in view, and the last tick it actually was - a
+    // peek that breaks LOS keeps the target for a short memory window rather than
+    // dropping it outright (M7 3.8), so this is what tells the aim snapshot below
+    // whether it is allowed to update from the target's live position.
+    botVisible = true;
+    botLastSeenAt = 0;
     botAlly = noone;
     botHoldFire = false;
     botCloakAt = 0;

@@ -3,8 +3,9 @@
 /// target surface is actually flyable, and returns it - or -1 if no takeoff works.
 ///
 /// The takeoff used to be fixed at the end of the run facing the landing (ax1 going
-/// right, ax0 going left), which is the natural choice and not always a possible one.
-/// What makes a takeoff unusable is almost never the landing - it is what is *above* the
+/// right, ax0 going left), which is the natural choice and not always a possible one -
+/// see the base/off comment below for the case it missed entirely. What makes a
+/// takeoff unusable is almost never the landing - it is what is *above* the
 /// takeoff. Every jump in GG2 rises until something stops it, so a low ceiling over the
 /// end of a run shortens every arc that starts there, and one low enough leaves no arc
 /// that reaches the target at all. Two cells further along there is headroom and the
@@ -23,10 +24,11 @@
 /// same landing from further away is a faster arc, and faster is what fails. The search
 /// still earns its place on the ceiling case above; the crate case no longer needs it.
 ///
-/// Offsets are tried from the end inward, so the first hit is also the cheapest: cost
-/// grows with horizontal distance, and stepping back from the edge only ever adds
-/// distance. NAV_JUMP_TAKEOFF_TRIES bounds it, and the source run's own width bounds it
-/// again - a one-cell surface has exactly one takeoff whatever the constant says.
+/// Offsets are tried from the nearest-to-target column outward, so the first hit is
+/// also the cheapest: cost grows with horizontal distance, and stepping back only ever
+/// adds distance. NAV_JUMP_TAKEOFF_TRIES bounds it, and the source run's own width
+/// bounds it again - a one-cell surface has exactly one takeoff whatever the constant
+/// says.
 ///
 /// The arc walked here is the *whole* flight, apex included, down to where it comes
 /// back through the landing row - not the truncated one a climbing jump used to get.
@@ -44,7 +46,7 @@
 /// working them out again would be a second copy of that reasoning agreeing by luck.
 
 var freeGrid, nodeGrid, ay, ax0, ax1, by, bx0, bx1, dir, w, h, toNode;
-var off, tries, takeoff, xLand, dCells, dWorld, tHit, vx, lead, capHeight;
+var off, tries, base, takeoff, xLand, dCells, dWorld, tHit, vx, lead, capHeight;
 var k, t, sx, sy, samples, blocked, prevSy, sweepY, onto, apex;
 
 freeGrid = argument0;
@@ -60,14 +62,35 @@ w = argument9;
 h = argument10;
 toNode = argument11;
 
-tries = min(NAV_JUMP_TAKEOFF_TRIES, ax1 - ax0 + 1);
+// The search starts at the column nearest the target and steps away from it, not
+// at the source run's own end. Those agree whenever the target lies beyond that
+// end - the disjoint gap-crossing case this was originally written for, where the
+// nearest reachable column to a target off to one side already IS that side's
+// end. They stop agreeing when the target's own span overlaps the source's: a
+// platform sitting under a ledge that is itself part of the same wide run can
+// have its nearest approach columns nowhere near ax0/ax1 at all, and the old
+// fixed anchor never tried them within NAV_JUMP_TAKEOFF_TRIES - four columns in
+// from an end that might be fifteen columns from the only sky clear enough to
+// jump through (koth_corinth's ramp: the platform below it is wide, the ramp
+// foot sits seven columns in from its left edge, and the low overhang above the
+// ramp's own tread rules out every column directly beneath it - the climb exists
+// two columns further back, invisible to a search anchored at either end).
+if(dir < 0)
+    base = max(ax0, min(ax1, bx1 + 1));
+else
+    base = min(ax1, max(ax0, bx0 - 1));
+
+if(dir < 0)
+    tries = min(NAV_JUMP_TAKEOFF_TRIES, ax1 - base + 1);
+else
+    tries = min(NAV_JUMP_TAKEOFF_TRIES, base - ax0 + 1);
 
 for(off = 0; off < tries; off += 1)
 {
     if(dir < 0)
-        takeoff = ax0 + off;
+        takeoff = base + off;
     else
-        takeoff = ax1 - off;
+        takeoff = base - off;
 
     // How much climb this takeoff actually has, which is not always the apex - and
     // when it is not, the arc is shorter, faster and still perfectly flyable.

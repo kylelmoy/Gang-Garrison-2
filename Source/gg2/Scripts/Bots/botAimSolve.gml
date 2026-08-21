@@ -52,6 +52,7 @@
 /// highly legible from the receiving end.
 
 var char, tx, ty, tvx, tvy, leadMode, weapon, spd, grav, drift, t0;
+var tfloor, snapY, snapLimit, node;
 
 char = argument0;
 tx = argument1;
@@ -114,7 +115,10 @@ if(spd <= 0)
     return point_direction(char.x, char.y, tx, ty);
 
 if(leadMode == BOT_LEAD_NONE)
-    return botAimLead(char.x, char.y, tx, ty, 0, 0, spd, grav, drift);
+    // "Standing still" means standing still on every axis, not just the horizontal ones -
+    // pin the floor to ty itself so botAimLead's target-gravity term has nothing to fall
+    // through and vanishes, same as tvy = 0 already meant before that term existed.
+    return botAimLead(char.x, char.y, tx, ty, 0, 0, spd, grav, drift, ty);
 
 if(leadMode == BOT_LEAD_LINEAR)
 {
@@ -122,8 +126,34 @@ if(leadMode == BOT_LEAD_LINEAR)
     // standing now, then a stationary drop solve to that point. Deliberately not
     // botAimLead's iteration - the whole difference between this tier and the next is
     // that the flight time is never re-measured against the point being led to.
+    //
+    // The linear step already applied tvy by hand, so the point handed to botAimLead is
+    // treated as at rest there - pin the floor to it for the same reason as
+    // BOT_LEAD_NONE, or the target-gravity term would apply a second, uncoordinated fall
+    // on top of this one.
     t0 = min(max(point_distance(char.x, char.y, tx, ty) / spd, 1), BOT_AIM_MAX_TICKS);
-    return botAimLead(char.x, char.y, tx + tvx * t0, ty + tvy * t0, 0, 0, spd, grav, drift);
+    return botAimLead(char.x, char.y, tx + tvx * t0, ty + tvy * t0, 0, 0, spd, grav, drift,
+                      ty + tvy * t0);
 }
 
-return botAimLead(char.x, char.y, tx, ty, tvx, tvy, spd, grav, drift);
+// Search downward from the target for the nearest floor - the same snap
+// botObjectiveUpdate uses to anchor a goal onto the graph (M7 3.6). A cheap
+// approximation: exactly right for a target that lands back on the platform it left,
+// and only wrong if it drifts onto a different one mid-flight, same as everywhere else
+// in this codebase that already accepts "the nearest node below" as the answer.
+tfloor = 100000; // no map is this tall; disables the clamp when the graph has no floor here
+if(global.navReady)
+{
+    snapLimit = ty + NAV_MAX_FALL * NAV_CELL_SIZE;
+    for(snapY = ty; snapY <= snapLimit; snapY += NAV_CELL_SIZE)
+    {
+        node = navNodeFromWorld(tx, snapY);
+        if(node >= 0)
+        {
+            tfloor = (ds_grid_get(global.navNodes, NAV_NODE_Y, node) + NAV_BOX_H) * NAV_CELL_SIZE - 23;
+            break;
+        }
+    }
+}
+
+return botAimLead(char.x, char.y, tx, ty, tvx, tvy, spd, grav, drift, tfloor);

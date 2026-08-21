@@ -52,6 +52,7 @@ var nodes, nodeCount, freeGrid, nodeGrid, gateGrid, rowStart, w, h, fromNode, to
 var i, j, side, dir, ay, ax0, ax1, by, bx0, bx1, takeoff, xLand;
 var dCells, tHit, vx, samples, cost, k, t, sx, sy, minRow, maxRow, ry, queue, kept;
 var srcGate, arcGate, cellGate;
+var keptRows, bonusUsed, far, ki, krow;
 
 nodes = argument0;
 nodeCount = argument1;
@@ -141,17 +142,51 @@ for(i = fromNode; i < toNode; i += 1)
     // (F35): a far platform is almost always reachable by landing on a nearer one and
     // going again, so the extra edges buy nothing and cost build time, memory and A*
     // expansion for every query afterwards.
+    //
+    // ⚠️ "Cheapest few" is blind to what a landing actually connects to, and that is
+    // its own failure mode - found on `ctf_conflict`/`ctf_avanti` (M7 tier 2) and
+    // again, worse, on `ctf_truefort`: a node standing at the top of one long
+    // staircase has many cheap candidates landing one step further down that same
+    // staircase, all mutually redundant with each other, and they fill the whole
+    // quota before a genuinely different, structurally load-bearing candidate is ever
+    // considered - on `ctf_truefort` the missing edge ranked 7th cheapest, well
+    // outside any quota this project would want to raise blindly (see the method note
+    // in the M7 plan on why a global bump is the wrong lever once the rank gets that
+    // deep). What every one of those redundant candidates has in common is landing
+    // close to the *other kept candidates'* own row, not close to the source's - they
+    // are one staircase, seen from its top. So one extra slot is kept back for
+    // whatever is cheapest among the leftovers whose row is not close to anything
+    // already kept: at most one more edge per source per direction, same bounded cost
+    // as the M7 tier-2 constant bump, but aimed at the actual failure instead of
+    // raising a global cap and hoping the next map's rank is shallow enough to catch.
     kept = 0;
-    while(kept < NAV_JUMP_MAX_PER_SIDE and !ds_priority_empty(queue))
+    bonusUsed = false;
+    keptRows = ds_list_create();
+    while(!ds_priority_empty(queue) and (kept < NAV_JUMP_MAX_PER_SIDE or !bonusUsed))
     {
         j = ds_priority_delete_min(queue);
         by = ds_grid_get(nodes, NAV_NODE_Y, j);
         bx0 = ds_grid_get(nodes, NAV_NODE_X0, j);
         bx1 = ds_grid_get(nodes, NAV_NODE_X1, j);
 
+        // Past the normal quota, only a landing that reaches somewhere none of the
+        // kept edges already did is worth the one bonus slot.
+        if(kept >= NAV_JUMP_MAX_PER_SIDE)
+        {
+            far = true;
+            for(ki = 0; ki < ds_list_size(keptRows) and far; ki += 1)
+            {
+                krow = ds_list_find_value(keptRows, ki);
+                if(abs(by - krow) <= NAV_JUMP_DIVERSITY_ROWS)
+                    far = false;
+            }
+            if(!far)
+                continue;
+        }
+
         // Re-derive the winning takeoff rather than carrying it out of the candidate
         // loop: a ds_priority holds a value and a priority and nothing else, and this
-        // runs at most NAV_JUMP_MAX_PER_SIDE times per side against a candidate loop
+        // runs at most NAV_JUMP_MAX_PER_SIDE+1 times per side against a candidate loop
         // that considered every surface in the envelope. Cheap, and it keeps one
         // definition of what a flyable arc is.
         takeoff = navJumpTakeoff(freeGrid, nodeGrid, ay, ax0, ax1,
@@ -202,8 +237,13 @@ for(i = fromNode; i < toNode; i += 1)
         // the trajectory. A slow climb wants 0.54px/tick; round() calls that 1, an
         // 85% error, which over a 22-tick flight is two cells past an 18px ledge.
         navEdgeAdd(i, j, NAV_EDGE_JUMP, vx, tHit, cost, arcGate, takeoff);
-        kept += 1;
+        ds_list_add(keptRows, by);
+        if(kept < NAV_JUMP_MAX_PER_SIDE)
+            kept += 1;
+        else
+            bonusUsed = true;
     }
+    ds_list_destroy(keptRows);
     ds_priority_destroy(queue);
     }
 }

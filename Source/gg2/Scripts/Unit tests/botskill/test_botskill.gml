@@ -64,7 +64,7 @@ for(i = 1; i <= 5; i += 1)
     test_assert_equals(true, lerped <= prevFire);
     prevFire = lerped;
 
-    lerped = botSkillLerp(skill, 12, 6, 2.5, 0.7);
+    lerped = botSkillLerp(skill, 4, 1.5, 0.5, 0.2);
     test_assert_equals(true, lerped <= prevErr);
     prevErr = lerped;
 
@@ -83,12 +83,13 @@ test_assert_equals(30, probe.botAcquireTicks);
 test_assert_equals(45, probe.botFireDelayTicks);
 test_assert_equals(15, probe.botPerceiveTicks);
 test_assert_equals(8, probe.botAimInterval);
-test_assert_equals(12, probe.botAimErrorDeg);
+test_assert_equals(4, probe.botAimErrorDeg);
 test_assert_equals(20, probe.botAimConeDeg);
 test_assert_equals(6, probe.botTurnRate);
-// Easy bots do not lead and do not aim splash at feet: both are Quake III's own gates,
-// and both are highly legible to whoever is being shot at.
-test_assert_equals(BOT_LEAD_NONE, probe.botLeadMode);
+// Every tier leads fully now (M7 3.4) - under-leading was not a legible difficulty
+// signal, it just read as a bad shot. Easy bots still do not aim splash at feet, which
+// is Quake III's own gate and stays legible to whoever is being shot at.
+test_assert_equals(BOT_LEAD_FULL, probe.botLeadMode);
 test_assert_equals(false, probe.botSplashAim);
 
 botSkillApply(probe, 0.95);
@@ -96,16 +97,16 @@ test_assert_equals(6, probe.botAcquireTicks);
 test_assert_equals(0, probe.botFireDelayTicks);
 test_assert_equals(1, probe.botPerceiveTicks);
 test_assert_equals(2, probe.botAimInterval);
-test_assert_equals(0.7, probe.botAimErrorDeg);
+test_assert_equals(0.2, probe.botAimErrorDeg);
 test_assert_equals(24, probe.botTurnRate);
 test_assert_equals(0, probe.botHoldFireChance);
 test_assert_equals(BOT_LEAD_FULL, probe.botLeadMode);
 test_assert_equals(true, probe.botSplashAim);
 
-// Tier 4 - hard - leads, but only linearly. This is the gate that keeps "hard" and
-// "expert" apart at range, so it is worth pinning rather than leaving to the constant.
+// Tier 4 - hard - also leads fully now (M7 3.4): what still keeps "hard" and "expert"
+// apart at range is the aim-error ladder and the latency gates, not leading.
 botSkillApply(probe, 0.75);
-test_assert_equals(BOT_LEAD_LINEAR, probe.botLeadMode);
+test_assert_equals(BOT_LEAD_FULL, probe.botLeadMode);
 test_assert_equals(true, probe.botSplashAim);
 
 // A tick count is never fractional, and never zero where zero would mean "every tick
@@ -161,17 +162,20 @@ test_assert_equals(true, abs(botAimSpread(3, 0, 0.3, true, 0, 90) - 0.9) < 0.000
 // are about where the shot ends up, not about the angle.
 for(i = 0; i <= 2; i += 1)
 {
+    // Grounded target (tvy = 0, floor pinned to its own ty), so botAimLead's
+    // target-gravity term vanishes and these three modes are still comparing pure
+    // leading behaviour, same as before that term existed.
     if(i == BOT_LEAD_NONE)
-        dir = botAimLead(500, 500, 875, 500, 0, 0, 13, 0.15, 0);
+        dir = botAimLead(500, 500, 875, 500, 0, 0, 13, 0.15, 0, 500);
     else if(i == BOT_LEAD_LINEAR)
     {
         // The one line of botAimSolve worth duplicating: predict once at the flight time
         // to where the target stands now, then solve the drop to that fixed point.
         t0 = min(max(point_distance(500, 500, 875, 500) / 13, 1), BOT_AIM_MAX_TICKS);
-        dir = botAimLead(500, 500, 875 + 6 * t0, 500, 0, 0, 13, 0.15, 0);
+        dir = botAimLead(500, 500, 875 + 6 * t0, 500, 0, 0, 13, 0.15, 0, 500);
     }
     else
-        dir = botAimLead(500, 500, 875, 500, 6, 0, 13, 0.15, 0);
+        dir = botAimLead(500, 500, 875, 500, 6, 0, 13, 0.15, 0, 500);
 
     px = 500;
     py = 500;
@@ -202,7 +206,7 @@ for(i = 0; i <= 2; i += 1)
 // case that makes the ladder a ladder rather than a switch - a hard bot is not simply
 // worse everywhere, it is worse at range.
 t0 = min(max(point_distance(500, 500, 650, 500) / 13, 1), BOT_AIM_MAX_TICKS);
-dir = botAimLead(500, 500, 650 + 6 * t0, 500, 0, 0, 13, 0.15, 0);
+dir = botAimLead(500, 500, 650 + 6 * t0, 500, 0, 0, 13, 0.15, 0, 500);
 px = 500;
 py = 500;
 pvx = lengthdir_x(13, dir);
@@ -244,5 +248,112 @@ test_assert_equals(true, BOT_HEAL_RANGE <= botClassRange(CLASS_MEDIC));
 // time the target steps over a single line - and each toggle is a broadcast packet.
 test_assert_equals(true, BOT_UNZOOM_RANGE < BOT_ZOOM_RANGE);
 test_assert_equals(true, BOT_ZOOM_RANGE <= botClassRange(CLASS_SNIPER));
+
+// --- botClassMinBand: the inner edge of the same band (M7 tier 3) ---------------------
+
+// botClassRange owns the outer edge, botClassMinBand the inner one, and the invariant
+// that matters is that they never cross: a minimum above the maximum is a bot that
+// tracks an enemy and never fires, which reads as broken rather than as badly tuned.
+// Asserted for every class rather than for the two splash ones, because the default
+// branch applies to classes nobody thinks about when adding a new constant.
+for(i = CLASS_SCOUT; i <= CLASS_QUOTE; i += 1)
+{
+    test_assert_equals(true, botClassMinBand(i) >= 0);
+    test_assert_equals(true, botClassMinBand(i) < botClassRange(i));
+}
+
+// The two splash classes carry the self-harm band; everyone else carries at most the
+// much smaller degeneracy floor. This is what botFindTarget's "rank a point-blank enemy
+// a whole attention radius worse" and botInputUpdate's back-off both read.
+test_assert_equals(BOT_SPLASH_SAFE, botClassMinBand(CLASS_SOLDIER));
+test_assert_equals(BOT_SPLASH_SAFE, botClassMinBand(CLASS_DEMOMAN));
+
+// The three close-range classes must have no minimum at all. Backing a Pyro away from a
+// fight backs it out of the only fight it can win - its Flame cannot reach past
+// BOT_FLAME_REACH - and the same goes for a Spy's stab and a Medic's beam.
+test_assert_equals(0, botClassMinBand(CLASS_PYRO));
+test_assert_equals(0, botClassMinBand(CLASS_SPY));
+test_assert_equals(0, botClassMinBand(CLASS_MEDIC));
+test_assert_equals(BOT_MIN_ENGAGE, botClassMinBand(CLASS_SCOUT));
+test_assert_equals(BOT_MIN_ENGAGE, botClassMinBand(CLASS_SNIPER));
+
+// A Generator ranks below every possible live enemy, whatever the class and however far
+// away it is. If it did not, a bot would keep shooting a wall while somebody killed it.
+for(i = CLASS_SCOUT; i <= CLASS_QUOTE; i += 1)
+    test_assert_equals(true, botClassRange(i) * 2 < BOT_GEN_THREAT);
+
+// A firing position has to be inside the weapon's reach *and* outside the self-harm band,
+// or botGoalSpot is asked for a band with nothing in it and every generator attacker
+// falls back to walking onto the generator itself.
+for(i = CLASS_SCOUT; i <= CLASS_QUOTE; i += 1)
+    test_assert_equals(true, botClassMinBand(i) < botClassRange(i) * BOT_SPOT_BAND);
+
+// --- botRoleAssign: one defender in every BOT_DEFEND_EVERY, by roster position ---------
+
+// The bug this pins is a real one the first version of botRoleAssign had: counting a
+// bot's *team-mates* rather than its own position down the roster gives every bot on the
+// team the same number, so a team of exactly BOT_DEFEND_EVERY becomes all defenders at
+// once and a team of any other size becomes none. Both assertions below are deliberately
+// stated so that they do not depend on how many bots the roster already held - any six
+// consecutive positions contain exactly two multiples of three, wherever they start, and
+// the two are always BOT_DEFEND_EVERY apart. Under the old bug the count is 6 or 0.
+var roles, bots, defenders, firstDef, lastDef, k;
+bots = ds_list_create();
+for(k = 0; k < 6; k += 1)
+{
+    probe = instance_create(0, 0, Player);
+    probe.isBot = true;
+    probe.team = TEAM_RED;
+    ds_list_add(global.players, probe);
+    ds_list_add(bots, probe);
+}
+
+defenders = 0;
+firstDef = -1;
+lastDef = -1;
+roles = "";
+for(k = 0; k < 6; k += 1)
+{
+    probe = ds_list_find_value(bots, k);
+    botRoleAssign(probe);
+    if(probe.botRole == BOT_ROLE_DEFEND)
+    {
+        defenders += 1;
+        if(firstDef < 0)
+            firstDef = k;
+        lastDef = k;
+    }
+    roles = roles + string(probe.botRole);
+
+    // The route seed is what makes this bot's A* differ from its team-mates' (M7 1.4),
+    // and 0 is the "no jitter" sentinel every non-bot caller passes - so a bot must never
+    // be handed it, or route variety silently does nothing for that one bot.
+    test_assert_equals(true, probe.botRouteSeed != 0);
+    // The goal spread is bounded, or a bot walks off to a point that has nothing to do
+    // with the objective it was given (M7 2.4).
+    test_assert_equals(true, abs(probe.botSpreadX) <= BOT_SPREAD_MAX);
+}
+test_assert_equals(2, defenders);
+test_assert_equals(BOT_DEFEND_EVERY, lastDef - firstDef);
+
+// Stable: re-running it changes nothing, so a role cannot flicker between two values
+// while a bot is walking somewhere - which would be indistinguishable from a bot that
+// cannot make up its mind, and would throw away the whole point of the split.
+for(k = 0; k < 6; k += 1)
+{
+    probe = ds_list_find_value(bots, k);
+    botRoleAssign(probe);
+    roles = roles + string(probe.botRole);
+}
+test_assert_equals(string_copy(roles, 1, 6), string_copy(roles, 7, 6));
+
+for(k = 0; k < 6; k += 1)
+{
+    probe = ds_list_find_value(bots, k);
+    ds_list_delete(global.players, ds_list_find_index(global.players, probe));
+    with(probe)
+        instance_destroy();
+}
+ds_list_destroy(bots);
 
 test_unit_end();

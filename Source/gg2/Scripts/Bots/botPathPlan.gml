@@ -83,7 +83,10 @@ if(goalNode < 0)
     return false;
 player.botGoalNode = goalNode;
 
-player.botPath = navFindPath(startNode, goalNode, player.team, char.intel, player.botBlacklist);
+// botRouteSeed is this bot's own idea of what edges cost (M7 1.4) - non-zero only for
+// bots, so a hand-issued or test query still gets the plain deterministic search.
+player.botPath = navFindPath(startNode, goalNode, player.team, char.intel,
+                             player.botBlacklist, player.botRouteSeed);
 player.botPathAt = 0;
 player.botReplans += 1;
 

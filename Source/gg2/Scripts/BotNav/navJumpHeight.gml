@@ -26,9 +26,12 @@
 ///
 /// ⚠️ Past terminal velocity the fall stops accelerating: Step.xml clamps vspeed at
 /// NAV_JUMP_TERM_VY = 10 px/tick, which a fall from rest reaches after 16.7 ticks and
-/// 83px. A 240px drop - NAV_MAX_FALL, the deepest the graph considers - really takes
-/// 51.9 ticks and the unclamped parabola says 45.3, a 15% underestimate that becomes a
-/// 15% overestimate of the speed the arc needs and lands the bot well past its target.
+/// 83px. A 900px drop - NAV_MAX_FALL, the deepest the graph considers (M7 tier 2:
+/// dkoth_atalia's spawn rooms sit a genuine 846px above the ground and nothing shorter
+/// covers the intended route) - really takes 98.3 ticks and the unclamped parabola
+/// says 54.8, a 44% underestimate that becomes a much larger overestimate of the speed
+/// the arc needs and lands the bot well past its target. The gap only widens with
+/// NAV_MAX_FALL, which is exactly why this clamp cannot be skipped as a simplification.
 
 var t, capHeight, apexHeight, tUp, d, dTerm, drop;
 t = argument0;

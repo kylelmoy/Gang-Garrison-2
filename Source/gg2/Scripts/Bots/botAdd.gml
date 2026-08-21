@@ -28,6 +28,11 @@ player.class = class;
 ServerPlayerChangeteam(playerId, player.team, global.sendBuffer);
 ServerPlayerChangeclass(playerId, player.class, global.sendBuffer);
 
+// Attack or defend, plus the per-bot goal spread and route seed that make this bot's
+// version of a shared objective differ from its team-mates' (M7 tier 3). After the team
+// is set, because it counts the team it is joining.
+botRoleAssign(player);
+
 if(team != TEAM_SPECTATOR)
     player.alarm[5] = 1; // Will spawn in the same step (between Begin Step and Step)
 

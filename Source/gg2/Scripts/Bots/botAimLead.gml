@@ -1,7 +1,11 @@
-/// botAimLead(sx, sy, tx, ty, tvx, tvy, spd, grav, drift)
+/// botAimLead(sx, sy, tx, ty, tvx, tvy, spd, grav, drift, tfloor)
 /// Returns the direction (degrees) to fire from (sx, sy) so that a projectile of muzzle
 /// speed spd, per-tick gravity grav, and an added constant horizontal drift meets a
 /// target that is at (tx, ty) now and moving at (tvx, tvy) px/tick.
+///
+/// tfloor is the world y (same axis as ty) the target cannot be predicted to fall past -
+/// its feet meet a floor there. Pass a very large number (100000; no map is that tall)
+/// when none is known.
 ///
 /// The pure arithmetic behind botAimSolve, kept separate from the weapon table so it can
 /// be tested against a forward simulation without needing a Character, a weapon or a map
@@ -22,11 +26,24 @@
 /// raised by the sag and shifted back by the drift:
 ///
 ///     ax = tx + (tvx - drift)*t
-///     ay = ty + tvy*t - grav*t*(t + 1)/2
+///     ay = tyPred - grav*t*(t + 1)/2
 ///
 /// The only unknown is t, and t is just the distance to that virtual point over spd,
 /// because the projectile covers spd px of that straight line every tick. So: guess t,
 /// place the point, re-measure t, repeat.
+///
+/// tyPred is the target's own predicted height, not a bare ty + tvy*t. A Character falls
+/// under the same gravity as anything else (NAV_JUMP_GRAVITY 0.6 px/tick^2, terminal
+/// NAV_JUMP_TERM_VY 10), so a linear-only prediction has a target that jumped a moment
+/// ago rising at its launch speed forever - a bot used to fire high in the air at anyone
+/// airborne. tyPred integrates that fall continuously (the same closed form navJumpHeight
+/// uses, generalised from a standing jump to an arbitrary starting tvy - matches a
+/// tick-by-tick simulation of Character's own midpoint gravity to a few hundredths of a
+/// px), clamped at terminal velocity, then clamped a second time at tfloor so a long
+/// flight cannot predict a falling target through the ground it would already have
+/// landed on - the mirror image of the bug this fixes. A grounded, non-vertically-moving
+/// target (tvy = 0, tfloor = ty) clamps on the very first tick and this term vanishes
+/// exactly, so nothing above changes for a target standing still.
 ///
 /// BOT_AIM_ITERATIONS is 8 rather than the 2-3 that "iterate the flight time" usually
 /// wants, and the reason is worth knowing before anyone trims it. Each pass shrinks the
@@ -52,7 +69,8 @@
 /// spd must be positive; a hitscan or beam weapon has no flight time to solve and wants
 /// point_direction instead. botAimSolve is what makes that call.
 
-var sx, sy, tx, ty, tvx, tvy, spd, grav, drift, i, t, ax, ay;
+var sx, sy, tx, ty, tvx, tvy, spd, grav, drift, tfloor, i, t, ax, ay;
+var tClamp, tyPred;
 
 sx = argument0;
 sy = argument1;
@@ -63,6 +81,7 @@ tvy = argument5;
 spd = argument6;
 grav = argument7;
 drift = argument8;
+tfloor = argument9;
 
 t = point_distance(sx, sy, tx, ty) / spd;
 
@@ -70,7 +89,23 @@ for(i = 0; i < BOT_AIM_ITERATIONS; i += 1)
 {
     t = min(max(t, 1), BOT_AIM_MAX_TICKS);
     ax = tx + (tvx - drift) * t;
-    ay = ty + tvy * t - grav * t * (t + 1) / 2;
+
+    // The target's own fall: the same terminal-velocity-clamped closed form as
+    // navJumpHeight, generalised from a standing jump (v0 = NAV_JUMP_V0) to an
+    // arbitrary starting vertical speed tvy.
+    if(tvy < NAV_JUMP_TERM_VY)
+        tClamp = (NAV_JUMP_TERM_VY - tvy) / NAV_JUMP_GRAVITY;
+    else
+        tClamp = 0;
+    if(t <= tClamp)
+        tyPred = ty + tvy * t + NAV_JUMP_GRAVITY * t * t / 2;
+    else
+        tyPred = ty + tvy * tClamp + NAV_JUMP_GRAVITY * tClamp * tClamp / 2
+                 + NAV_JUMP_TERM_VY * (t - tClamp);
+    if(tyPred > tfloor)
+        tyPred = tfloor;
+
+    ay = tyPred - grav * t * (t + 1) / 2;
     t = point_distance(sx, sy, ax, ay) / spd;
 }
 
@@ -78,6 +113,17 @@ for(i = 0; i < BOT_AIM_ITERATIONS; i += 1)
 // solved for rather than the one before it.
 t = min(max(t, 1), BOT_AIM_MAX_TICKS);
 ax = tx + (tvx - drift) * t;
-ay = ty + tvy * t - grav * t * (t + 1) / 2;
+if(tvy < NAV_JUMP_TERM_VY)
+    tClamp = (NAV_JUMP_TERM_VY - tvy) / NAV_JUMP_GRAVITY;
+else
+    tClamp = 0;
+if(t <= tClamp)
+    tyPred = ty + tvy * t + NAV_JUMP_GRAVITY * t * t / 2;
+else
+    tyPred = ty + tvy * tClamp + NAV_JUMP_GRAVITY * tClamp * tClamp / 2
+             + NAV_JUMP_TERM_VY * (t - tClamp);
+if(tyPred > tfloor)
+    tyPred = tfloor;
+ay = tyPred - grav * t * (t + 1) / 2;
 
 return point_direction(sx, sy, ax, ay);
