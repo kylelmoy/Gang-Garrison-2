@@ -126,14 +126,33 @@ switch(player.class)
         // is the other half, actually waiting for the charge before pulling the trigger.
         // Only applies with the Rifle out - the melee and secondary have no charge to
         // wait for, so they fall through to the shared default's shoot-on-sight cases.
+        //
+        // ⚠️ Neither does an *unzoomed* Rifle, and missing that made a Sniper useless at
+        // anything but long range for as long as this branch has existed. The charge only
+        // accumulates while zoomed - Rifle's Begin Step is `if(owner.zoomed and
+        // readyToShoot) t += 1` with `else t = 0` - and botServerActions only zooms at
+        // BOT_ZOOM_RANGE, unzooming again at BOT_UNZOOM_RANGE. So for a target between the
+        // minimum band and ~250-400px, t is pinned at 0, the threshold below is always
+        // above it, and the trigger was simply never pulled: the bot acquired an enemy
+        // closing on it, tracked it all the way in, and never fired a shot. Measured with
+        // the behaviour harness, same bot and window with only the distance changed - a
+        // dummy at 200px took 0 damage over four runs while a generator at 460px took 67.
+        //
+        // Firing unzoomed is not a compromise, it is the game's own close-range answer:
+        // the Rifle carries a separate unscopedDamage (35) that Begin Step selects
+        // whenever the owner is not zoomed. Waiting would be waiting for a number that
+        // cannot change. Zoom stays where it is - it is a liability up close on purpose
+        // (botServerActions), so the fix belongs here rather than in the zoom thresholds.
         if(subject != noone)
         {
             if(instance_exists(weapon) and weapon.object_index == Rifle)
             {
+                if(!char.zoomed)
+                    keys |= KEY_ATTACK;
                 // Scale the wait with distance: a target out near botClassRange is not
                 // closing fast enough to punish a full charge, one much closer is close
                 // to a melee problem by the time a full charge would land.
-                if(weapon.t >= weapon.chargeTime * min(1, dist / botClassRange(CLASS_SNIPER)))
+                else if(weapon.t >= weapon.chargeTime * min(1, dist / botClassRange(CLASS_SNIPER)))
                     keys |= KEY_ATTACK;
             }
             else
