@@ -48,7 +48,10 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
 5. **Combat/behaviour** — target selection modelled on `SentryTurret`'s End Step (a `ds_priority`
    over nearby `Character`s, LOS via `collision_line_bulletblocking`), plus per-class firing policy
    and a difficulty model (aim error, reaction latency, decision cadence).
-6. **Configuration** — `[Bots]` section in `gg2.ini`, plus a **Bots** tab in the hosting menu.
+6. **Configuration** — `[Bots]` section in `gg2.ini`, plus a **Bots** tab in the hosting menu:
+   whether bots are enabled, how many players to fill to, a cap, a minimum number of humans, a name
+   prefix, whether removal waits for death, and `Difficulty` (1-5), which becomes the skill scalar
+   every behaviour knob is derived from.
 
 ## Gotchas worth remembering
 
@@ -163,7 +166,7 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
   does not go, and blacklists the edge that misled it. Verified on `gg_debug`: a bot walks from
   spawn to a named point through a drop-through platform, back uphill over jump edges, and through
   its own team gate, arriving within a few pixels each time.
-- **M6** — objectives and aim: partly implemented.
+- **M6** — objectives, aim, per-class policy and difficulty: implemented.
   - **Objectives per game mode** (`Scripts/Bots/botObjectiveUpdate.gml`): implemented and verified.
     The game mode is inferred from which objects exist, the same way `basicRoomSetup` does it, since
     nothing stores it. CTF/Invasion bots fetch the enemy intel and run it home once carrying;
@@ -191,6 +194,52 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
     placed on the valley floor climbs all four steep jumps to the control point and stands on the
     capture zone, where it previously managed one or two links in eight times the frames. All three
     `gg_debug` legs from M5 still pass and are roughly twice as fast as when they were recorded.
-  - **Not yet implemented**: per-class firing policy (engagement bands, the right-click behaviours,
-    Medic needles versus heal beam) and the difficulty tiers. Bots currently all shoot at the same
-    accuracy and cadence, and hold fire at whatever they can see.
+  - **Per-class firing policy** (`Scripts/Bots/botClassKeys.gml`, `botClassRange.gml`,
+    `botServerActions.gml`): implemented and verified. Each class has an engagement range that is
+    its weapon's real reach rather than a preference — a Pyro's flames die at ~130px and a Rifle is
+    limited by sight — and it is both the target-search radius and the outer edge of the firing
+    band, so a bot never tracks what it could not shoot. Minimum bands exist only where firing
+    would hurt the shooter: a Soldier or Demoman does not fire inside its own blast radius.
+    `SPECIAL` is not one action, so the policy is per class: a Pyro airblasts an incoming
+    `Rocket`/`Flare`/`Mine` in front of it when it has the 40 ammo the blast costs; a Demoman
+    detonates the moment any mine it owns has an enemy on it, since the key detonates all of them
+    at once; a Medic holds the heal beam on the teammate who most needs it (scored by health
+    fraction, then by how much the body can absorb) and pops Uber only with an enemy inside 200px,
+    and fires needles on `SPECIAL` alone when there is no one to heal; a Spy re-cloaks when nothing
+    is in front of it, uncloaks to shoot, and attacks while cloaked inside stab range. Cloak has to
+    arrive as a rising edge rather than a held bit, so that branch throttles itself.
+  - **The actions that are not key bits** (`Scripts/GameServer/serverToggleZoom.gml`,
+    `serverBuildSentry.gml`, `serverEatSandvich.gml`): zoom, build and eat are client *commands*,
+    not bits in the input byte, so a bot cannot press them. Rather than duplicate their
+    preconditions, the bodies of those three cases were extracted from `processClientCommands` into
+    scripts that both paths call. A Sniper zooms past 400px and unzooms inside 250 (two thresholds,
+    so a target stepping over one line does not toggle a broadcast every cadence); an Engineer
+    builds when nothing is shooting at it; a Heavy eats when hurt and out of the fight.
+  - **Difficulty tiers** (`Scripts/Bots/botSkillApply.gml`, `botSkillLerp.gml`, `botAimSpread.gml`,
+    `botCombatUpdate.gml`): implemented and verified. `[Bots] Difficulty` is 1-5 and becomes one
+    skill scalar per bot, which drives eleven knobs interpolated between values published by games
+    that shipped bot ladders — Quake III's `chars.h`, Counter-Strike's `BotProfile.db`, TF2's four
+    tiers, Unreal Tournament's eight. The shape that matters is that a weak bot is **slow**, not
+    just inaccurate: `see -> acquire -> aim-settled -> fire` is four separate gates, and a tier-1
+    bot takes 83 frames from a target appearing to its first shot where a tier-5 bot takes 7.
+    Between them sit a target snapshot that only refreshes every few ticks (perception lag), a
+    desired aim recomputed on its own interval, and an aim that slews toward it at a limited turn
+    rate — tracking lag, overshoot and settling all fall out of those three numbers, with no filter
+    anywhere. Aim error is uniform rather than Gaussian, as Quake III's is, and carries a decaying
+    focus cone after acquisition, a moving-target scale, and Quake III's close-range penalty, which
+    makes *every* tier worse point-blank on purpose: it is an anti-frustration measure, since
+    without it bots are unbeatable in a brawl. Target leading is gated the same way Quake III gates
+    it — none, then one linear prediction, then the full iterated intercept — which is legible from
+    the receiving end: linear leading lands a Shot on a target running 6px/tick at 150px and misses
+    it by 46px at 375px, where the full solve still connects.
+  - **Verified live** on `gg_debug` with a dedicated server at 30 fps: first-shot latency 83 frames
+    (tier 1) against 7 (tier 5); aim held 0.1-0.9 degrees off the true bearing at tier 5 against a
+    0-12 degree swing at tier 1; a tier-1 bot against a tier-5 bot over 2400 frames went 6 kills
+    and 11 deaths to 11 and 6. Every `SPECIAL` policy and all three non-keybyte actions were
+    checked against a live server: zoom in at 500px and out at 200, a sentry built, a sandvich
+    eaten only when hurt, airblast held back at 10 ammo and fired at 200, a mine detonated only
+    with an enemy on it, and the Spy's four cloak states. `Scripts/Unit tests/botskill/` covers the
+    knob table, the error formula, the leading ladder and the class bands in 88 assertions.
+  - **Not yet implemented**: Demoman sticky-jumping, Engineer sentry *placement* strategy (it
+    builds where it stands), Spy flanking routes, and field of view as a difficulty knob. Bots also
+    do not yet target sentries, only Characters.
