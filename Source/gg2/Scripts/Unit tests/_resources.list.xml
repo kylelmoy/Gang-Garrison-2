@@ -8,4 +8,5 @@
   <resource name="ggon" type="GROUP"/>
   <resource name="navgraph" type="GROUP"/>
   <resource name="botaim" type="GROUP"/>
+  <resource name="botskill" type="GROUP"/>
 </resources>

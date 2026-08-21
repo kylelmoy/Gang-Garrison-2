@@ -219,4 +219,27 @@
   <constant name="BOT_GOAL_RETARGET_DIST" value="48"/>
   <constant name="BOT_AIM_ITERATIONS" value="8"/>
   <constant name="BOT_AIM_MAX_TICKS" value="60"/>
+  <constant name="BOT_TIER_MIN" value="1"/>
+  <constant name="BOT_TIER_MAX" value="5"/>
+  <constant name="BOT_LEAD_NONE" value="0"/>
+  <constant name="BOT_LEAD_LINEAR" value="1"/>
+  <constant name="BOT_LEAD_FULL" value="2"/>
+  <constant name="BOT_TARGET_PERIOD" value="15"/>
+  <constant name="BOT_AIM_CONE_DECAY" value="0.98819"/>
+  <constant name="BOT_AIM_SETTLE_DEG" value="3"/>
+  <constant name="BOT_CLOSE_RANGE" value="90"/>
+  <constant name="BOT_CLOSE_PENALTY" value="0.6"/>
+  <constant name="BOT_FEET_OFFSET" value="20"/>
+  <constant name="BOT_SPLASH_SAFE" value="110"/>
+  <constant name="BOT_FLAME_REACH" value="130"/>
+  <constant name="BOT_AIRBLAST_RANGE" value="150"/>
+  <constant name="BOT_AIRBLAST_ARC" value="75"/>
+  <constant name="BOT_HEAL_RANGE" value="300"/>
+  <constant name="BOT_UBER_RANGE" value="200"/>
+  <constant name="BOT_MINE_TRIGGER" value="60"/>
+  <constant name="BOT_STAB_RANGE" value="40"/>
+  <constant name="BOT_CLOAK_PERIOD" value="15"/>
+  <constant name="BOT_ZOOM_RANGE" value="400"/>
+  <constant name="BOT_UNZOOM_RANGE" value="250"/>
+  <constant name="BOT_EAT_HP_FRACTION" value="0.5"/>
 </constants>

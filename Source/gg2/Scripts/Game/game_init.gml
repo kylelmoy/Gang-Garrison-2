@@ -144,6 +144,8 @@
     global.botNamePrefix = ini_read_string("Bots", "NamePrefix", "[BOT] ");
     global.botRemoveOnDeath = ini_read_real("Bots", "RemoveOnDeath", 1);
     global.botRemoveTimeoutSeconds = ini_read_real("Bots", "RemoveTimeoutSeconds", 20);
+    // 1-5, easy to expert. botAdd turns it into the skill scalar every knob comes from.
+    global.botDifficulty = max(BOT_TIER_MIN, min(BOT_TIER_MAX, ini_read_real("Bots", "Difficulty", 3)));
     global.botNameCounter = 0;
 
     //thy playerlimit shalt not exceed 48!
@@ -231,6 +233,7 @@
     ini_write_string("Bots", "NamePrefix", global.botNamePrefix);
     ini_write_real("Bots", "RemoveOnDeath", global.botRemoveOnDeath);
     ini_write_real("Bots", "RemoveTimeoutSeconds", global.botRemoveTimeoutSeconds);
+    ini_write_real("Bots", "Difficulty", global.botDifficulty);
 
     ini_write_real("Settings", "Resolution", global.resolutionkind);
     ini_write_real("Settings", "Framerate", global.frameratekind);

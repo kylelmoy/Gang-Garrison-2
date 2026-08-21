@@ -12,6 +12,12 @@ player = instance_create(0,0,Player);
 player.isBot = true;
 player.name = name;
 
+// The server's 1-5 difficulty setting is one point on a continuous skill scale, in even
+// steps, so tiers 1, 4 and 5 land exactly on the anchors the published tuning tables are
+// quoted at (botSkillLerp). Everything a bot does differently at a different difficulty
+// comes out of the knobs this sets.
+botSkillApply(player, 0.15 + (max(BOT_TIER_MIN, min(BOT_TIER_MAX, global.botDifficulty)) - 1) * 0.2);
+
 playerId = ds_list_size(global.players);
 ds_list_add(global.players, player);
 ServerPlayerJoin(player.name, global.sendBuffer);

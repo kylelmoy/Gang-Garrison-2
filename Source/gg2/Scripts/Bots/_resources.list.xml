@@ -16,4 +16,16 @@
   <resource name="botPathKeys" type="RESOURCE"/>
   <resource name="botInputUpdate" type="RESOURCE"/>
   <resource name="botObjectiveUpdate" type="RESOURCE"/>
+  <resource name="botSkillLerp" type="RESOURCE"/>
+  <resource name="botSkillApply" type="RESOURCE"/>
+  <resource name="botCombatUpdate" type="RESOURCE"/>
+  <resource name="botClassRange" type="RESOURCE"/>
+  <resource name="botClassKeys" type="RESOURCE"/>
+  <resource name="botFindAlly" type="RESOURCE"/>
+  <resource name="botEnemyWithin" type="RESOURCE"/>
+  <resource name="botMinesArmed" type="RESOURCE"/>
+  <resource name="botIncomingProjectile" type="RESOURCE"/>
+  <resource name="botServerActions" type="RESOURCE"/>
+  <resource name="botAimSpread" type="RESOURCE"/>
+  <resource name="botAngleDelta" type="RESOURCE"/>
 </resources>

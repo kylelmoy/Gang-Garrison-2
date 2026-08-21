@@ -210,23 +210,7 @@ while(commandLimitRemaining > 0) {
             break;
             
         case BUILD_SENTRY:
-            if(player.object != -1)
-            {
-                if(player.class == CLASS_ENGINEER
-                        and collision_circle(player.object.x, player.object.y, 50, Sentry, false, true) < 0
-                        and player.object.nutsNBolts == 100
-                        and (collision_point(player.object.x,player.object.y,SpawnRoom,0,0) < 0)
-                        and !player.sentry
-                        and !player.object.onCabinet)
-                {
-                    write_ubyte(global.sendBuffer, BUILD_SENTRY);
-                    write_ubyte(global.sendBuffer, playerId);
-                    write_ushort(global.serializeBuffer, round(player.object.x*5));
-                    write_ushort(global.serializeBuffer, round(player.object.y*5));
-                    write_byte(global.serializeBuffer, player.object.image_xscale);
-                    buildSentry(player, player.object.x, player.object.y, player.object.image_xscale);
-                }
-            }
+            serverBuildSentry(player, playerId);
             break;                                       
 
         case DESTROY_SENTRY:
@@ -246,34 +230,11 @@ while(commandLimitRemaining > 0) {
             break;     
               
         case OMNOMNOMNOM:
-            if(player.object != -1) {
-                if(!player.humiliated
-                    and !player.object.taunting
-                    and !player.object.omnomnomnom
-                    and player.object.canEat
-                    and player.class==CLASS_HEAVY)
-                {                            
-                    write_ubyte(global.sendBuffer, OMNOMNOMNOM);
-                    write_ubyte(global.sendBuffer, playerId);
-                    with(player.object)
-                    {
-                        omnomnomnom = true;
-                        omnomnomnomindex=0;
-                        omnomnomnomend=32;
-                        xscale=image_xscale;
-                    }             
-                }
-            }
+            serverEatSandvich(player, playerId);
             break;
              
         case TOGGLE_ZOOM:
-            if player.object != -1 {
-                if player.class == CLASS_SNIPER {
-                    write_ubyte(global.sendBuffer, TOGGLE_ZOOM);
-                    write_ubyte(global.sendBuffer, playerId);
-                    toggleZoom(player.object);
-                }
-            }
+            serverToggleZoom(player, playerId);
             break;
                                                       
         case PLAYER_CHANGENAME:

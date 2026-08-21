@@ -59,6 +59,44 @@
     botLastReplanY = -100000;
     botReplanNear = 0;
     botAttackKeys = 0;
+
+    // Bot combat and difficulty state (milestone 6). botSkillApply writes the knobs from
+    // one skill scalar when the bot is created; the defaults here are what a Player that
+    // is not a bot keeps, and are the expert end of every knob so that a missing
+    // botSkillApply shows up as a bot that behaves rather than as one that never fires.
+    botSkill = 1;
+    botAcquireTicks = 0;
+    botFireDelayTicks = 0;
+    botPerceiveTicks = 1;
+    botAimInterval = 1;
+    botTurnRate = 360;
+    botAimErrorDeg = 0;
+    botAimConeDeg = 0;
+    botMoveErrMult = 1;
+    botHoldFireChance = 0;
+    botLeadMode = BOT_LEAD_FULL;
+    botSplashAim = true;
+    // Who the bot is shooting at and when it first saw them: the acquisition delay, the
+    // fire delay and the focus cone are all measured from botTargetAt.
+    botTarget = noone;
+    botTargetAt = 0;
+    botAlly = noone;
+    botHoldFire = false;
+    botCloakAt = 0;
+    // The perceived target - deliberately stale between refreshes, which is where
+    // perception lag comes from - and the aim the bot is slewing towards.
+    botAimSubject = noone;
+    botPerceiveAt = 0;
+    botSeeX = 0;
+    botSeeY = 0;
+    botSeeVX = 0;
+    botSeeVY = 0;
+    botAimAt = 0;
+    botAimX = 0;
+    botAimY = 0;
+    botAimWant = 0;
+    botAimDir = 0;
+
     // Diagnostics, so that "the stuck detector and the blacklist both fire" is a thing
     // that can be read off a running server rather than inferred from behaviour.
     botReplans = 0;

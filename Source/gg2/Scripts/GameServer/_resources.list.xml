@@ -10,4 +10,7 @@
   <resource name="sendLobbyUnreg" type="RESOURCE"/>
   <resource name="GameServerEndStep" type="RESOURCE"/>
   <resource name="getNumberOfOccupiedSlots" type="RESOURCE"/>
+  <resource name="serverToggleZoom" type="RESOURCE"/>
+  <resource name="serverBuildSentry" type="RESOURCE"/>
+  <resource name="serverEatSandvich" type="RESOURCE"/>
 </resources>
