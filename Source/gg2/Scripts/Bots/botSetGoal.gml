@@ -17,6 +17,7 @@ player.botGoalX = argument1;
 player.botGoalY = argument2;
 player.botHasGoal = true;
 player.botArrived = false;
+player.botArrivedAt = -1;
 player.botGoalNode = -1;
 
 // Force the next tick to plan rather than waiting out the re-plan timer of the route

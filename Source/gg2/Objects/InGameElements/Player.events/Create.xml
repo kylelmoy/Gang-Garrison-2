@@ -35,6 +35,19 @@
     botGoalNode = -1;
     botHasGoal = false;
     botArrived = false;
+    // Suspends the objective layer for this one bot, so that whoever set the goal keeps
+    // it. Nothing in the game ever sets this - it exists for the behaviour test harness
+    // (gg2-agent's botscenario.js), which measures "can this bot walk from A to B on this
+    // map" and needs B to still be B thirty ticks later. Without it botObjectiveUpdate
+    // rewrites the goal from the game mode's objective on its own cadence and the test
+    // silently measures the objective layer instead of the thing it asked about.
+    //
+    // A flag rather than a harness-side workaround on purpose: the alternative that does
+    // not touch game code is deactivating the mode's objective objects, which does stop
+    // botObjectiveUpdate - and also makes KothHUD throw every single frame, because it
+    // reads KothControlPoint.locked unguarded. One line here is cheaper than a harness
+    // that has to know which objects each of six game modes will miss.
+    botGoalLocked = false;
     botReplanAt = 0;
     botEdgeFrom = -1;
     botEdgeTo = -1;
@@ -155,6 +168,9 @@
     // Diagnostics, so that "the stuck detector and the blacklist both fire" is a thing
     // that can be read off a running server rather than inferred from behaviour.
     botReplans = 0;
+    // The tick botPathKeys last declared arrival, or -1 for "not since the last goal".
+    // botSetGoal clears it, so it always belongs to the goal currently being followed.
+    botArrivedAt = -1;
     botStuckFires = 0;
     botBlacklistFires = 0;
     botOffRouteFires = 0;

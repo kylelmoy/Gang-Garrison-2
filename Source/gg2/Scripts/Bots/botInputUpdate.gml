@@ -76,7 +76,9 @@ if(alive and !player.botAliveLast)
     player.botRegroupUntil = tick + random(BOT_REGROUP_TICKS);
 player.botAliveLast = alive;
 
-if((tick + player) mod BOT_OBJECTIVE_PERIOD == 0)
+// botGoalLocked suspends this for one bot, so that a goal set from outside stays set.
+// Nothing in the game sets it; see Player's Create event for what it is for.
+if(!player.botGoalLocked and (tick + player) mod BOT_OBJECTIVE_PERIOD == 0)
     botObjectiveUpdate(player);
 
 navKeys = botPathKeys(player);

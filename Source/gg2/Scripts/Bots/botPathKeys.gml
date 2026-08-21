@@ -185,6 +185,13 @@ if(player.botPathAt >= size - 1)
         if(char.onground and abs(char.hspeed) < 1)
         {
             player.botArrived = true;
+            // The tick it arrived on, beside the other four diagnostics counters. Read
+            // against the tick the goal was issued, this is how long the leg took - the
+            // one number a navigation change can be compared on. Sampling it from outside
+            // cannot recover it: arrival clears the goal, so a bot that has arrived and a
+            // bot that never had a goal look identical a moment later, and the bot is free
+            // to walk away in between.
+            player.botArrivedAt = GameServer.frame;
             player.botHasGoal = false;
             botPathFree(player);
             return 0;
