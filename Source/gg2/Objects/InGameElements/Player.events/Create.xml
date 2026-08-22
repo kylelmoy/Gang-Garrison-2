@@ -116,6 +116,16 @@
     // A Scout's second, mid-air jump (M7 4.1). Edge-triggered like every other jump, and
     // spent once per airborne period so it cannot be fired twice on one arc.
     botAirJumpUsed = false;
+    // The tick of the last *voluntary* hop - the blocked-shot peek and the ambient combat
+    // hop, both in botInputUpdate, which share BOT_HOP_PERIOD between them. A dodge away
+    // from a projectile that is actually in the air does not consult this: that one is a
+    // reflex, and throttling it would be throttling self-preservation.
+    botHopAt = 0;
+    // Ticks spent on the ground failing to satisfy the current jump edge's takeoff gate.
+    // botPathKeys zeroes it whenever the edge changes or the bot actually leaves the
+    // ground; BOT_TAKEOFF_PATIENCE is what stops a gate that can refuse from refusing for
+    // the rest of the round.
+    botTakeoffTicks = 0;
     // Set by botPathKeys while it is flying a jump edge's planned trajectory. Nothing may
     // touch the movement keys during that - the arc is a position per tick that the
     // generator validated, and any nudge in the air is permanent (M6 part 5) - so this is
@@ -173,6 +183,12 @@
     botArrivedAt = -1;
     botStuckFires = 0;
     botBlacklistFires = 0;
+    // What was blacklisted, not just how often - "off:251>254@1830,stk:254>255@1902",
+    // reason:from>to@frame, comma separated and deliberately space-free so the scenario
+    // runner's field parser can carry it in one token. Bounded, because this is a
+    // diagnostic on every bot in every round and an unbounded string on a long round is
+    // a leak; the first few entries are the ones worth having anyway.
+    botBlacklistLog = "";
     botOffRouteFires = 0;
     
     // client setting stuff; set to defaults

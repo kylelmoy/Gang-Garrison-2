@@ -47,7 +47,8 @@
 
 var freeGrid, nodeGrid, ay, ax0, ax1, by, bx0, bx1, dir, w, h, toNode;
 var off, tries, base, takeoff, xLand, dCells, dWorld, tHit, vx, lead, capHeight;
-var k, t, sx, sy, samples, blocked, prevSy, sweepY, onto, apex;
+var k, t, sx, sy, cx, cxf, tPrev, wantF, stepCols, aimCol, heldBack;
+var samples, blocked, prevSy, sweepY, onto, apex, needRise;
 
 freeGrid = argument0;
 nodeGrid = argument1;
@@ -94,7 +95,16 @@ for(off = 0; off < tries; off += 1)
 
     // How much climb this takeoff actually has, which is not always the apex - and
     // when it is not, the arc is shorter, faster and still perfectly flyable.
-    capHeight = navJumpCeiling(freeGrid, takeoff, ay);
+    // The corridor navJumpCeiling scans is bounded by the far edge of the surface being
+    // aimed at: an arc that drifts past its own landing is not a climb onto it.
+    // How much climb this jump is actually asking for. Mask y grows downward, so a
+    // target above the takeoff is a smaller row; a descent asks for nothing and never
+    // reaches navJumpCeiling's corridor pass at all.
+    needRise = (ay - by) * NAV_CELL_SIZE;
+    if(dir < 0)
+        capHeight = navJumpCeiling(freeGrid, takeoff, ay, dir, bx0, needRise);
+    else
+        capHeight = navJumpCeiling(freeGrid, takeoff, ay, dir, bx1, needRise);
 
     // Once the rise ends the character is coming down, and the first surface it comes
     // down on is where the jump ends whatever the graph intended (F41). Under a ceiling
@@ -133,12 +143,87 @@ for(off = 0; off < tries; off += 1)
 
     blocked = false;
     prevSy = ay;
+    cx = takeoff;
+    cxf = takeoff;
+    tPrev = 0;
     samples = max(NAV_JUMP_SAMPLES, ceil(tHit));
     for(k = 1; k <= samples; k += 1)
     {
         t = tHit * k / samples;
-        sx = round(takeoff + dir * (vx * t) / NAV_CELL_SIZE);
         sy = round(ay - navJumpHeight(t, capHeight) / NAV_CELL_SIZE);
+
+        // Where the arc WANTS to be is wantF; where the character actually is is cx,
+        // and the two differ against a wall. GG2 does not move a character into terrain,
+        // it stops it against it and keeps the vertical motion - which is the whole of
+        // climbing a flush wall face, and something a player does without thinking.
+        // Treating the first cell of lateral overlap as fatal instead refused an entire
+        // class of climb: ctf_avanti's n251 stands one column from a 54px block whose
+        // top is n229, needs 54px of a 57.4px apex to clear it, and therefore cannot
+        // have moved sideways at ALL before it is over the top. The old walk sampled it
+        // half a column left nine rows up, found the block, and refused - so the graph
+        // priced n251's run to the enemy intel at 538 cells against a straight line of
+        // 76, the worst ratio on any shipped map, for a climb a human makes on the way
+        // past.
+        //
+        // ⚠️ Being held back is NOT free, and the first version of this made it free -
+        // which invented two edges on cp_dirtbowl that the follower then tried and could
+        // not fly (found by the blacklist log: `off:248>221`, `off:244>221`). A character
+        // in the air moves at most NAV_JUMP_VX, so a tick spent against a wall is a tick
+        // of travel that is simply gone, and it can only be made up out of whatever
+        // surplus the planned arc left. A slow climbing arc has plenty - avanti's is
+        // 0.35px/tick against a 4.53 cap - and a near-flat arc across a gap has none, so
+        // that is the one that must still be refused. Hence the per-sample budget: move
+        // toward the plan by at most NAV_JUMP_VX * dt, never past the plan itself.
+        //
+        // Stepping one column at a time is what makes this a sweep rather than a guess:
+        // the character cannot teleport past a pillar between two sampled positions.
+        wantF = takeoff + dir * (vx * t) / NAV_CELL_SIZE;
+        stepCols = NAV_JUMP_VX * (t - tPrev) / NAV_CELL_SIZE;
+        if(dir > 0)
+            aimCol = round(min(wantF, cxf + stepCols));
+        else
+            aimCol = round(max(wantF, cxf - stepCols));
+
+        heldBack = false;
+        while(cx != aimCol)
+        {
+            if(cx + dir < 0 or cx + dir > w - NAV_BOX_W)
+            {
+                heldBack = true;
+                break;
+            }
+            // Above the top of the walkmask is open sky, not a wall. Airborne needs
+            // seven rows, not the six freeGrid is dilated by - see navJumpCeiling.
+            if(sy >= 0)
+            {
+                if(ds_grid_get(freeGrid, cx + dir, sy) != 1)
+                {
+                    heldBack = true;
+                    break;
+                }
+                if(sy - 1 >= 0)
+                {
+                    if(ds_grid_get(freeGrid, cx + dir, sy - 1) != 1)
+                    {
+                        heldBack = true;
+                        break;
+                    }
+                }
+            }
+            cx += dir;
+        }
+
+        // Held against a wall, the fractional position collapses onto the column it is
+        // stuck in; the distance it did not travel is not recoverable later except out
+        // of the speed budget above.
+        if(heldBack)
+            cxf = cx;
+        else if(dir > 0)
+            cxf = min(wantF, cxf + stepCols);
+        else
+            cxf = max(wantF, cxf - stepCols);
+        tPrev = t;
+        sx = cx;
 
         // Off the side of the map, or below its bottom, is a dead end.
         if(sx < 0 or sx > w - NAV_BOX_W or sy > h - NAV_BOX_H)
@@ -147,13 +232,23 @@ for(off = 0; off < tries; off += 1)
             break;
         }
 
-        // Above the top of the walkmask is open sky, not a ceiling.
+        // Above the top of the walkmask is open sky, not a ceiling. The body is in the
+        // air here, so it spans seven rows rather than the six freeGrid is dilated by -
+        // see the warning in navJumpCeiling for what dropping this costs.
         if(sy >= 0)
         {
             if(ds_grid_get(freeGrid, sx, sy) != 1)
             {
                 blocked = true;
                 break;
+            }
+            if(sy - 1 >= 0)
+            {
+                if(ds_grid_get(freeGrid, sx, sy - 1) != 1)
+                {
+                    blocked = true;
+                    break;
+                }
             }
 
             // Clearance says the body fits here; it does not say the character is still
@@ -180,6 +275,14 @@ for(off = 0; off < tries; off += 1)
 
         prevSy = sy;
     }
+
+    // A wall that held the character back the whole way is not a jump onto anything -
+    // it is a hop that ends against the wall. The arc is only proven if the character
+    // actually got to the column the edge names, which is the same F41 discipline the
+    // descending sweep above enforces: an edge whose recorded landing is not where the
+    // body ends up is a fiction the follower is then asked to fly.
+    if(!blocked and cx != xLand)
+        blocked = true;
 
     if(!blocked)
     {

@@ -6,7 +6,9 @@
 /// unlike a walk edge this emits a single direction, and the reverse link only exists
 /// if a jump edge later supplies it.
 ///
-/// The model is a straight vertical drop from the cell just past each end of the run.
+/// The model is a straight vertical drop from the cell just past each end of the run,
+/// and that column is stored on the edge (NAV_EDGE_TAKEOFF) so the follower knows which
+/// end to walk off rather than guessing - see the comment at the navEdgeAdd call.
 /// A character does keep its horizontal speed while falling, so this under-reports
 /// reachability - a bot can in reality drift some distance sideways on the way down.
 /// That is deliberate for now: every edge this emits is genuinely traversable, which
@@ -100,7 +102,19 @@ for(i = fromNode; i < toNode; i += 1)
             cost = max(1, dropped);
             if(arcGate == NAV_GATE_NONE)
                 arcGate = ds_grid_get(nodes, NAV_NODE_GATE, landed);
-            navEdgeAdd(i, landed, NAV_EDGE_FALL, 0, dropped, cost, arcGate, -1);
+            // xEdge is carried as the edge's takeoff column, and it is not a
+            // decoration. Which END of the run this fall leaves from is not
+            // recoverable from the two nodes alone: where the landing surface reaches
+            // under both ends of the takeoff run - a platform sitting on a wider ledge
+            // - "the column just past the run that is inside the landing node" is true
+            // of both, and a follower guessing between them walks the wrong way about
+            // half the time. Measured on ctf_avanti: n92 (a strip of platform with a
+            // solid block against its right end) falls to n104 off its LEFT end, the
+            // follower guessed right, walked into the block and wedged there until the
+            // stuck detector took the edge away. Same shape at n94 -> n138. This is the
+            // jump generator's F41 lesson (see navEdgeAdd) applied to falls: the build
+            // knows the column, so the build says so.
+            navEdgeAdd(i, landed, NAV_EDGE_FALL, 0, dropped, cost, arcGate, xEdge);
         }
     }
 }

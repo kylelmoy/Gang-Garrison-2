@@ -13,6 +13,17 @@
 ///
 /// Minimum bands are botClassKeys' business, because they are about self-harm and
 /// weapon behaviour rather than about attention.
+///
+/// ⚠️ The Pyro is deliberately NOT its weapon's reach, and that is the one exception here.
+/// A Flame spawns 25 px out, lives 15 ticks at 6.5-10 px/tick and inherits the owner's
+/// motion, so it lands somewhere between ~120 and ~175 px depending on the roll and on
+/// whether the Pyro is running in. This value is the range at which the bot keeps *paying
+/// attention* to an enemy, and setting it at the weapon's reach (it was 140, against a
+/// BOT_FLAME_REACH of 130) meant a target that stepped 10 px back was dropped from the
+/// roster entirely: the bot stopped tracking, stopped turning, and had to re-acquire from
+/// scratch when it closed again. Reported from play as a Pyro that fires too late and
+/// stops too early. 200 keeps the target held while the Pyro closes the gap, which is what
+/// a Pyro's whole game is; botClassKeys still refuses the trigger past BOT_FLAME_REACH.
 
 var class;
 class = argument0;
@@ -27,7 +38,7 @@ switch(class)
     case CLASS_ENGINEER: return 400;
     case CLASS_HEAVY:    return 500;
     case CLASS_SPY:      return 300;
-    case CLASS_PYRO:     return 140;
+    case CLASS_PYRO:     return 200;
     case CLASS_QUOTE:    return 300;
 }
 

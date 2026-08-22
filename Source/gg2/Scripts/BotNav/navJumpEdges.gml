@@ -128,8 +128,13 @@ for(i = fromNode; i < toNode; i += 1)
                 dCells = abs(global.navJumpLandCol - takeoff);
 
                 // Jumping is more expensive than walking the same ground, so a route
-                // that can walk will.
-                cost = max(1, dCells) + NAV_JUMP_PENALTY;
+                // that can walk will - and "the same ground" is measured in TIME, not in
+                // distance. A cell is about a tick of walking (6px against 5-9px/tick),
+                // so charging an arc its flight ticks puts both edge kinds in the same
+                // currency. Charging only the ground it covers made a 20-tick hop down
+                // three steps look cheaper than walking those three steps, which is why
+                // bots hopped down every staircase they met.
+                cost = max(1, dCells, global.navJumpTicks) + NAV_JUMP_PENALTY;
                 ds_priority_add(queue, j, cost);
             }
 
@@ -202,7 +207,8 @@ for(i = fromNode; i < toNode; i += 1)
         dCells = abs(xLand - takeoff);
         tHit = global.navJumpTicks;
         vx = global.navJumpVx;
-        cost = max(1, dCells) + NAV_JUMP_PENALTY;
+        // Same currency as the candidate cost above: flight ticks, not ground covered.
+        cost = max(1, dCells, tHit) + NAV_JUMP_PENALTY;
 
         // Re-walk the arc for gates only now, rather than in the candidate loop: the
         // fan considers every surface in the envelope and keeps three, so sampling

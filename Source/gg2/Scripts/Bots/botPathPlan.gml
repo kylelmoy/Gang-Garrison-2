@@ -55,7 +55,7 @@ player.botLastReplanY = char.y;
 
 if(player.botReplanNear >= 2)
 {
-    botBlacklistEdge(player, prevFrom, prevTo);
+    botBlacklistEdge(player, prevFrom, prevTo, "thr");
     player.botReplanNear = 0;
 }
 

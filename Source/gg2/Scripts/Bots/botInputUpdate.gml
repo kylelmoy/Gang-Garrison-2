@@ -51,7 +51,7 @@
 /// cloaks on the rising edge of KEY_SPECIAL.
 
 var player, char, tick, navKeys, fireKeys, evadeKeys, alive;
-var subject, minBand, mates, holding;
+var subject, minBand, mates, holding, wantHop;
 
 player = argument0;
 char = player.object;
@@ -112,31 +112,52 @@ if(char.onground)
 
     // A rocket fired flat across open ground cannot be dodged without jumping, and a bot
     // that just stands there reads as having no self-preservation at all - checked first
-    // and widened to any direction, since you dodge things behind you too (M7 4.3).
+    // and widened to any direction, since you dodge things behind you too (M7 4.3). This
+    // one is a reflex to a thing that is actually in the air and is never throttled.
     if(botIncomingProjectile(char, BOT_AIRBLAST_RANGE, true))
         evadeKeys |= KEY_JUMP;
-    // Jump when the shot is blocked (M7 4.4, the cheap fragment of it). Holding a target
-    // the bot cannot currently see means something is between them - a lip, a crate, the
-    // edge of a roof - and hopping is what a player does about that. It reproduces the
-    // useful half of a jump-peek (get the shot over the obstacle) with no cover model at
-    // all, and it costs nothing extra to ask: botVisible is already maintained every
-    // perception tick by the target-memory window (M7 3.8), so there is no second
-    // collision_line here. What it does *not* do is the deliberate return to cover, which
-    // is the half that needs per-node sightlines and is still deferred.
+    // ⚠️ Everything below is a *voluntary* hop and shares one cooldown, because without it
+    // they are not a mannerism, they are a seizure. The blocked-shot roll below fires at
+    // 15% a tick, which is a hop every ~7 ticks - four a second, for as long as the target
+    // stays out of sight - and combat mostly happens where a bot has already arrived and
+    // botPathKeys is returning no movement keys at all, so there is nothing else moving to
+    // dilute it. Reported from play as "two bots shooting at each other seem to just be
+    // jumping up and down in place", which is exactly what 4 Hz looks like.
     //
-    // Rolled per tick rather than held. KEY_JUMP is edge-triggered, so a bit held down
-    // for as long as the obstruction lasts produces exactly one jump and then a bot
-    // standing there with the key pressed - the roll is what keeps releasing it, and a
-    // ~15% chance a tick both bobs at about the rate a player does and gets the first hop
-    // out inside a few frames.
-    else if(player.botTarget != noone and !player.botVisible and random(1) < 0.15)
-        evadeKeys |= KEY_JUMP;
-    // A low-rate random hop while in a fight (M7 4.2), independent of whether anything is
-    // actually incoming right now - cheap, and disproportionately human-looking: nothing
-    // else in the model makes a bot's feet leave the ground for no tactical reason. ~1%
-    // a tick averages one hop every three seconds of active combat.
-    else if(player.botTarget != noone and random(1) < 0.01)
-        evadeKeys |= KEY_JUMP;
+    // The roll rates are left alone: they decide how quickly the *first* hop comes out,
+    // which is the part that reads as reacting. BOT_HOP_PERIOD decides how often after
+    // that, which is the part that reads as twitching.
+    else if(tick - player.botHopAt >= BOT_HOP_PERIOD)
+    {
+        wantHop = false;
+
+        // Jump when the shot is blocked (M7 4.4, the cheap fragment of it). Holding a
+        // target the bot cannot currently see means something is between them - a lip, a
+        // crate, the edge of a roof - and hopping is what a player does about that. It
+        // reproduces the useful half of a jump-peek (get the shot over the obstacle) with
+        // no cover model at all, and it costs nothing extra to ask: botVisible is already
+        // maintained every perception tick by the target-memory window (M7 3.8), so there
+        // is no second collision_line here. What it does *not* do is the deliberate return
+        // to cover, which is the half that needs per-node sightlines and is still deferred.
+        //
+        // Rolled per tick rather than held. KEY_JUMP is edge-triggered, so a bit held down
+        // for as long as the obstruction lasts produces exactly one jump and then a bot
+        // standing there with the key pressed - the roll is what keeps releasing it.
+        if(player.botTarget != noone and !player.botVisible and random(1) < 0.15)
+            wantHop = true;
+        // A low-rate random hop while in a fight (M7 4.2), independent of whether anything
+        // is actually incoming right now - cheap, and disproportionately human-looking:
+        // nothing else in the model makes a bot's feet leave the ground for no tactical
+        // reason.
+        else if(player.botTarget != noone and random(1) < 0.01)
+            wantHop = true;
+
+        if(wantHop)
+        {
+            evadeKeys |= KEY_JUMP;
+            player.botHopAt = tick;
+        }
+    }
 }
 else if(botClassProfile(player.class, BOT_CP_AIRJUMP)
         and !player.botFlyingEdge and !player.botAirJumpUsed)

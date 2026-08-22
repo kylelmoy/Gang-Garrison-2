@@ -64,6 +64,19 @@ switch(player.class)
         break;
 
     case CLASS_PYRO:
+        // Open fire while still closing, not on arrival. A Flame takes ticks to fly and
+        // most of a Pyro's damage is the afterburn it lights, so the shot that matters is
+        // the one already in the air when the enemy walks into it - which is why
+        // BOT_FLAME_REACH sits at the far end of the flame's travel (~165 of a possible
+        // ~175) rather than safely inside it. Some of those flames fall short; the ammo
+        // pool is 200 at 1.8 a shot and refills on its own, so they cost nothing that
+        // matters.
+        //
+        // Nothing here stops on a lost sightline, and that is deliberate. dist and the aim
+        // both come off the target snapshot, which botCombatUpdate freezes at the last
+        // position actually seen and keeps for 30 ticks (M7 3.8) - so a Pyro whose target
+        // ducks behind a corner keeps washing that corner for a second, which is what a
+        // player does and what afterburn rewards.
         if(subject != noone and dist <= BOT_FLAME_REACH)
             keys |= KEY_ATTACK;
 

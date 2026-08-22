@@ -180,7 +180,9 @@ subjectIsAlly = false;
 if(botClassProfile(player.class, BOT_CP_HEALS))
 {
     if((tick + player) mod BOT_TARGET_PERIOD == 0)
-        player.botAlly = botFindAlly(char, BOT_HEAL_RANGE);
+        // false: a Medic beaming another Medic is correct play. Only the follow *goal*
+        // in botObjectiveUpdate has to exclude them, and it says why.
+        player.botAlly = botFindAlly(char, BOT_HEAL_RANGE, false);
 
     valid = (player.botAlly != noone);
     if(valid)

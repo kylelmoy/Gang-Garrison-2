@@ -60,7 +60,7 @@
 var player, char, wx, wy, found, anchorX, anchorY, useSpot, held, carryGoal;
 var spotMin, spotMax, spotHigh, spotLOS, spotMode, classWants, spotNode, snapNode, spreadX;
 var ownBase, enemyFlag, targetGen, enemyPoint, bestDist, cpTarget, zoneCp, defending;
-var ally, foe, spawn, pushLen, pushX, pushY, wantPush;
+var ally, foe, spawn, pushLen, pushX, pushY, wantPush, chaseTeam, carrier, contested;
 
 player = argument0;
 char = player.object;
@@ -93,7 +93,12 @@ if(player.botGoalIsSpot and player.botHasGoal and player.botPath < 0)
 // standing still does not and the goal is left alone.
 if(botClassProfile(player.class, BOT_CP_FOLLOW) and !char.intel)
 {
-    ally = botFindAlly(char, BOT_MEDIC_FOLLOW_RANGE);
+    // true: never anchor on another following bot. Two Medics who pick each other each
+    // have the other's position as their goal, are already standing on it, and neither
+    // ever leaves spawn - see botFindAlly's header. With nobody left to follow this falls
+    // through to the mode cascade below and the Medic walks the objective like everyone
+    // else, healing whoever it meets on the way, which is what the fallthrough is for.
+    ally = botFindAlly(char, BOT_MEDIC_FOLLOW_RANGE, true);
     if(ally != noone)
     {
         wx = ally.x;
@@ -129,6 +134,7 @@ found = false;
 useSpot = false;
 held = false;
 carryGoal = false;
+contested = false;
 anchorX = 0;
 anchorY = 0;
 spotMin = 0;
@@ -136,6 +142,11 @@ spotMax = 0;
 spotHigh = 0;
 spotLOS = BOT_LOS_NEED;
 defending = (player.botRole == BOT_ROLE_DEFEND);
+
+// Which team's carrier this bot should be running at, if the flag it wants turns out to be
+// in somebody's hands rather than on the ground. -1 is "no chase", which is every mode
+// except CTF and most of CTF too. See the block below the mode cascade.
+chaseTeam = -1;
 
 if(instance_exists(IntelligenceBase) or instance_exists(Intelligence))
 {
@@ -152,6 +163,10 @@ if(instance_exists(IntelligenceBase) or instance_exists(Intelligence))
             wx = ownBase.x;
             wy = ownBase.y;
             found = true;
+            // A capture is a collision with the base, exactly like the grab at the other
+            // end of the run - so this is the second goal that has to be walked into
+            // rather than covered, and it gets the same treatment below.
+            carryGoal = true;
         }
     }
     else if(defending)
@@ -170,6 +185,19 @@ if(instance_exists(IntelligenceBase) or instance_exists(Intelligence))
             wy = enemyFlag.y;
             found = true;
         }
+        else
+        {
+            // Our flag has no instance, which means it is not on the ground: an enemy is
+            // carrying it. That is the single most urgent thing that happens to a
+            // defender in this game mode, and before this it was the one thing that made
+            // it stop having a job at all - the flag it guards stops existing, nothing
+            // sets found, and the bot stood at the empty stand until somebody else ended
+            // the round. Chase whoever has it.
+            if(player.team == TEAM_RED)
+                chaseTeam = TEAM_BLUE;
+            else
+                chaseTeam = TEAM_RED;
+        }
     }
     else
     {
@@ -185,6 +213,16 @@ if(instance_exists(IntelligenceBase) or instance_exists(Intelligence))
             // The one goal in the game that has to be walked into rather than merely
             // covered, which is what forbids a per-class standoff below.
             carryGoal = true;
+        }
+        else
+        {
+            // The flag this bot was going to fetch is already in a team-mate's hands, so
+            // there is nothing left at the far end to walk to. Escort the carrier home
+            // instead: it is the play, and it is also the only thing that keeps the rest
+            // of an attacking team moving - measured on ctf_truefort, three of four blue
+            // bots stood at the empty red stand for the whole time their team-mate was
+            // running the flag back.
+            chaseTeam = player.team;
         }
     }
 }
@@ -272,6 +310,7 @@ else if(instance_exists(KothRedControlPoint) and instance_exists(KothBlueControl
         }
         held = (enemyPoint.team == player.team
                 and point_distance(char.x, char.y, wx, wy) <= BOT_HOLD_RADIUS);
+        contested = botPointContested(enemyPoint, player.team);
         found = true;
     }
 }
@@ -342,12 +381,70 @@ else if(instance_exists(ControlPoint))
         // Same as the DKOTH branch above (M7 2.1/5.2/2.2).
         held = (cpTarget.team == player.team
                 and point_distance(char.x, char.y, wx, wy) <= BOT_HOLD_RADIUS);
+        contested = botPointContested(cpTarget, player.team);
         found = true;
     }
 }
 
+// --- the flag is in somebody's hands ---------------------------------------------------
+//
+// A carried flag has no instance at all (doEventGrabIntel destroys it and doEventDropIntel
+// makes a fresh one), so every branch above that asks instance_exists comes back empty and
+// the mode cascade has nothing to offer. The bot that is *holding* it is fine - it took the
+// carry branch - but everyone else on both teams was left with no goal: a defender whose
+// flag was just stolen, and an attacker whose team-mate beat it to the grab. Between them
+// that is most of a round's most interesting minute spent standing still.
+//
+// The goal is the carrier itself, which is a moving instance and therefore handled the way
+// the Medic's follow goal is: snap to a node and return early, rather than feeding a world
+// point into the spread and spot machinery below. Neither of those means anything against a
+// target that walks - a standoff band around a running player is a bot orbiting it, and a
+// spread is a deliberate miss of the one thing worth intercepting. BOT_GOAL_RETARGET_DIST
+// throttles the re-issue for free, exactly as it does for the Medic.
+//
+// One carrier per team at most (there is one flag each), so team alone identifies it.
+if(chaseTeam >= 0)
+{
+    carrier = noone;
+    with(Character)
+    {
+        // ⚠️ `player` inside here is the *Character's* own player, not this script's bot -
+        // hence chaseTeam, read off a local captured before the with().
+        if(intel and team == chaseTeam)
+            carrier = id;
+    }
+    if(carrier != noone)
+    {
+        snapNode = botNodeSnap(carrier.x, carrier.y);
+        if(snapNode >= 0)
+        {
+            botSetGoalNode(player, snapNode, carrier.x, false);
+            exit;
+        }
+    }
+    // No carrier resolvable - the flag changed hands or was returned between the test above
+    // and here - so fall through and keep whatever goal the bot already had, which is what
+    // this script has always done with a mode it cannot read.
+}
+
 if(!found)
     exit;
+
+// --- somebody is taking our point ------------------------------------------------------
+//
+// Every "stand somewhere better than the objective" behaviour below is correct only while
+// nothing is happening on the objective itself. A control point is captured by *bodies
+// inside the zone* and by nothing else, so the moment an enemy is standing in it, an
+// overlook 250px up the hill and a push 400px out toward their spawn are both the same
+// mistake: the bot is looking at the point it is losing. Reported from play as "if the
+// enemy is capturing the point, bots should return to it to fight / contest", which is
+// the whole of this block.
+//
+// held is dropped for everyone, which sends attacker and defender alike back to the zone
+// centre - an attacker that had pushed out stops holding forward ground and comes back to
+// the fight, which is where the round is being decided.
+if(contested)
+    held = false;
 
 // --- does this bot's class want to stand somewhere other than the objective? -----------
 //
@@ -373,6 +470,15 @@ if(spotMode != BOT_SPOT_NONE and !char.intel)
     else if(spotMode == BOT_SPOT_FLANK)
         classWants = !carryGoal;
 }
+
+// ⚠️ A defender's class opinion does not survive a point being taken. A Sniper perched 400px
+// back and an Engineer sat on a chokepoint are both doing something useful right up until
+// the moment the thing they are covering is being stood on by the enemy - at which point
+// the only move that touches the outcome is being in the zone. Attackers keep their class
+// positioning: their job was never to stand on it, and pulling a whole team onto one tile
+// is how a Demoman clears four bots at once.
+if(contested and defending)
+    classWants = false;
 
 // A class with its own positioning opinion does not also take the generic push. They are
 // two answers to the same question - "stand somewhere other than on the objective" - and
@@ -508,8 +614,30 @@ if(useSpot and GameServer.frame >= player.botSpotBanUntil)
 // A per-bot lateral offset, so a team heading for one objective arrives spread along it
 // rather than stacked on one column (M7 2.4), and a defender sits beside what it is
 // guarding rather than on top of it.
+//
+// ⚠️ Never on a goal that has to be *touched*. Standing 96px from a control point still
+// captures it and standing 96px from a generator still shoots it, which is what makes the
+// spread free everywhere else - but the intel is picked up by collision and the capture is
+// scored by collision, so an offset there is the difference between playing the game mode
+// and standing next to it. Measured on ctf_truefort: bots walked the whole map to the
+// enemy flag, stopped 37-67px short of it (BOT_ARRIVE_TOL is 8, so they stopped
+// *precisely*), and stood there - no grab, no cap, 0-0 after a full round with both teams
+// parked around a flag neither would touch. The per-class standoff above is already barred
+// from these two goals for the same reason; this is the other half of that rule, and it
+// was missing.
 spreadX = player.botSpreadX;
-if(defending)
+if(carryGoal or contested)
+{
+    // Both of these are goals the bot has to physically occupy rather than cover, so the
+    // spread comes off entirely. For a contested point that is not a nicety: a capture
+    // zone is 125px wide (koth_valley), BOT_SPREAD_MAX is 96 either way and a defender
+    // adds BOT_DEFEND_RADIUS on top - measured live, a defending Sniper sent to contest
+    // its own point stood at 2544 while the zone ended at 2393, contesting nothing. The
+    // bodies of several bots converging on one column push each other apart on their own,
+    // which is spread enough for a target this size.
+    spreadX = 0;
+}
+else if(defending)
 {
     if(spreadX >= 0)
         spreadX += BOT_DEFEND_RADIUS;

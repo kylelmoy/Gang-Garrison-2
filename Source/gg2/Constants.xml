@@ -146,7 +146,7 @@
   <constant name="KEY_JUMP" value="$80"/>
   <constant name="NAV_CELL_SIZE" value="6"/>
   <constant name="NAV_BOX_W" value="4"/>
-  <constant name="NAV_BOX_H" value="7"/>
+  <constant name="NAV_BOX_H" value="6"/>
   <constant name="NAV_NODE_FIELDS" value="6"/>
   <constant name="NAV_NODE_Y" value="0"/>
   <constant name="NAV_NODE_X0" value="1"/>
@@ -180,7 +180,7 @@
   <constant name="NAV_EDGE_DOUBLEJUMP" value="5"/>
   <constant name="NAV_EDGE_ROCKETJUMP" value="6"/>
   <constant name="NAV_EDGE_STICKYJUMP" value="7"/>
-  <constant name="NAV_CACHE_VERSION" value="9"/>
+  <constant name="NAV_CACHE_VERSION" value="13"/>
   <constant name="NAV_BUILD_SCAN_CELLS" value="32000"/>
   <constant name="NAV_BUILD_CLEAR_CELLS" value="8000"/>
   <constant name="NAV_BUILD_IDLE" value="0"/>
@@ -232,12 +232,12 @@
   <constant name="BOT_CLOSE_PENALTY" value="0.6"/>
   <constant name="BOT_FEET_OFFSET" value="20"/>
   <constant name="BOT_SPLASH_SAFE" value="110"/>
-  <constant name="BOT_FLAME_REACH" value="130"/>
+  <constant name="BOT_FLAME_REACH" value="165"/>
   <constant name="BOT_AIRBLAST_RANGE" value="150"/>
   <constant name="BOT_AIRBLAST_ARC" value="75"/>
   <constant name="BOT_HEAL_RANGE" value="300"/>
   <constant name="BOT_UBER_RANGE" value="200"/>
-  <constant name="BOT_MINE_TRIGGER" value="60"/>
+  <constant name="BOT_MINE_TRIGGER" value="30"/>
   <constant name="BOT_STAB_RANGE" value="40"/>
   <constant name="BOT_CLOAK_PERIOD" value="15"/>
   <constant name="BOT_ZOOM_RANGE" value="400"/>
@@ -259,6 +259,10 @@
   <constant name="BOT_REGROUP_MATES" value="2"/>
   <constant name="BOT_REGROUP_RADIUS" value="300"/>
   <constant name="BOT_DOUBLEJUMP_CHANCE" value="0.05"/>
+  <constant name="BOT_HOP_PERIOD" value="45"/>
+  <constant name="BOT_JUMP_VTOL" value="1"/>
+  <constant name="BOT_RUNUP_CELLS" value="6"/>
+  <constant name="BOT_TAKEOFF_PATIENCE" value="60"/>
   <constant name="BOT_GEN_THREAT" value="4000"/>
   <constant name="BOT_PUSH_FRAC" value="0.4"/>
   <constant name="BOT_PUSH_DIST" value="400"/>
