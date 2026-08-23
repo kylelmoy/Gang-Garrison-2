@@ -31,7 +31,7 @@
 var player, char, keys, here, size, cur, nxt, i, edgeRow, edgeType, found, moved;
 var mx, targetCol, tx, gx, n0, n1, c0, c1, takeoffCol, wantJump, dirToNext;
 var needVx, braking, tracking, flightTicks, jumpDist, jumpDir, jumpWantX, vAlong;
-var jumpNeed, landCol;
+var jumpNeed, landCol, takeoffLead;
 
 player = argument0;
 char = player.object;
@@ -469,6 +469,46 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
     else
         landCol = n1;
     jumpNeed = abs(navColWorldX(landCol) - navColWorldX(takeoffCol));
+
+    // ...minus whatever ground the bot has already covered INSIDE the takeoff column.
+    //
+    // A column is not a point. navAnchorCol is floor(x / NAV_CELL_SIZE) - NAV_BOX_W div 2,
+    // so every x across one whole cell - six world px - resolves to the same anchor
+    // column, and navColWorldX hands back the NEAR end of that run rather than its middle.
+    // A bot standing on the takeoff column is therefore somewhere in a 6px band, and the
+    // line above assumes it is at the near end of it.
+    //
+    // Crediting the difference is sound because the tracker below aims at an ABSOLUTE
+    // world x - navColWorldX(takeoffCol) + jumpDir * needVx * airTicks - not at a
+    // displacement from wherever the bot left the ground. Leaving from further along the
+    // jump does not move the landing point; it means there is less ground between the bot
+    // and it. The arc, its height and its clearance are untouched.
+    //
+    // Worth having rather than a rounding tidy-up: the run-up is the map's to give, and a
+    // one-column perch that overhangs the way it is jumping gives none, so every arc off
+    // one is gated at a standstill. Six pixels of floor is the difference between 0 and
+    // about 2.3px/tick for a Heavy. Modelled over the twenty-four cached graphs, 209 of
+    // the 293 arcs gg2-nav-gen would otherwise refuse become flyable once the gate stops
+    // asking for six pixels the bot has already walked. gg2-nav-gen/src/build.js credits
+    // the same six, and navfollow.js reports on the same basis; all three have to agree.
+    //
+    // The bot gets there without being told to: targetCol is the takeoff column and the
+    // steering below nudges toward dirToNext once it is within BOT_STEER_TOL of it, so it
+    // drifts across the cell and gains speed while this shrinks.
+    //
+    // Only ever a credit, never a debit. Behind the anchor the honest number is bigger,
+    // and asking for it is the mistake the block below warns about: the tracker clamps at
+    // needVx * flightTicks from the anchor, so an arc costed with no margin can never
+    // deliver more, and a gate that asks for it refuses on every approach forever.
+    // Clamped to one cell, so the credit can only ever be the width of the column itself.
+    takeoffLead = jumpDir * (char.x - navColWorldX(takeoffCol));
+    if(takeoffLead < 0)
+        takeoffLead = 0;
+    if(takeoffLead > NAV_CELL_SIZE)
+        takeoffLead = NAV_CELL_SIZE;
+    jumpNeed -= takeoffLead;
+    if(jumpNeed < 0)
+        jumpNeed = 0;
 
     if(char.onground)
     {

@@ -76,6 +76,21 @@ directory next to `Gang Garrison 2.exe`.
 map to humans normally. It retries every five seconds, so dropping a freshly generated file into
 `botnav/` is picked up by a running server without a restart.
 
+**A REPLACED file is picked up on the next map load, including a reload of the same map.**
+`navServerTick` reloads when either `navCacheKey()` changes or `global.navMapGen` does, and the
+latter is bumped by `CustomMapProcessLevelData` on the single line that creates a map's collision
+sprite - the only moment in the game at which a map's geometry comes into being. The key alone is
+not enough because it is the map's *identity*, and re-loading the same map does not change it:
+before this, a server that had already read a graph went on pathing against that copy no matter
+what was written to disk, which made every "regenerate and try it" loop require a restart and
+silently invalidated A/B measurements taken without one. Changing map to the map you are already
+on is now the whole loop:
+
+```
+$ node bin/gg2navgen.js build koth_valley   # regenerate
+... serverGotoMap("koth_valley") ...        # and it is in play
+```
+
 Two things stay in sync by hand:
 
 - **`Constants.xml` is the shared contract.** `gg2-nav-gen` parses `NAV_*` and `TEAM_*` out of this

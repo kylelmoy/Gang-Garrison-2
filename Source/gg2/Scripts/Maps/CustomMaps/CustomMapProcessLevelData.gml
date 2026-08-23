@@ -20,6 +20,15 @@
     } else {
         if(global.CustomMapCollisionSprite != -1) sprite_delete(global.CustomMapCollisionSprite);
         global.CustomMapCollisionSprite = sprite_add(argument1, 1, true, false, 0, 0);
+
+        // This line is the only moment in the game at which a map's collision geometry
+        // comes into existence, so it is also the only honest definition of "a map was
+        // loaded". navServerTick reloads the bot nav cache whenever this counter moves,
+        // which is what makes re-loading the SAME map pick up a regenerated graph -
+        // navCacheKey cannot notice that, since the key is the map's identity and the
+        // map's identity has not changed. See navServerTick for why that matters.
+        if(!variable_global_exists("navMapGen")) global.navMapGen = 0;
+        global.navMapGen += 1;
     }
     
     // grab the entity data
