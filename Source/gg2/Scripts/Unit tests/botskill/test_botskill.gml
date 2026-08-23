@@ -21,7 +21,7 @@ test_unit_begin();
 
 var i, t, skill, tk, dir, px, py, pvx, pvy, best, d, t0;
 var lerped, prevAcq, prevFire, prevErr, prevTurn;
-var probe, spread, spreadClose, spreadFar;
+var probe, aimProbe, spread, spreadClose, spreadFar;
 
 // --- botSkillLerp: the four anchors are exact, and outside them it clamps -------------
 
@@ -333,6 +333,38 @@ for(i = CLASS_SCOUT; i <= CLASS_QUOTE; i += 1)
     if(botClassProfile(i, BOT_CP_SPLASH))
         test_assert_equals(BOT_SPLASH_SAFE, botClassMinBand(i));
 }
+
+// The per-class aim multipliers scale a difficulty knob rather than replacing it, so a
+// zero or a negative is not "no error" - it is a class that cannot miss, or one whose
+// error runs backwards through botAimSpread's close-range divisor. Every class has to
+// have a usable one whether or not it has an opinion.
+for(i = CLASS_SCOUT; i <= CLASS_QUOTE; i += 1)
+{
+    test_assert_equals(true, botClassProfile(i, BOT_CP_AIM_ERR) > 0);
+    test_assert_equals(true, botClassProfile(i, BOT_CP_AIM_SETTLE) > 0);
+}
+
+// The two the playtest actually asked for, and they are opposite on purpose: the Soldier
+// makes every shot count, the Heavy does not need to hit with every bullet. Asserted by
+// direction rather than by value so retuning the constants does not rewrite the test,
+// but a sign flip - which would silently swap the two classes' feel - does fail it.
+test_assert_equals(true, botClassProfile(CLASS_SOLDIER, BOT_CP_AIM_ERR) < 1);
+test_assert_equals(true, botClassProfile(CLASS_HEAVY, BOT_CP_AIM_ERR) > 1);
+test_assert_equals(true, botClassProfile(CLASS_HEAVY, BOT_CP_AIM_SETTLE) > 1);
+
+// ⚠️ The multiplier must not be baked into botSkillApply. It runs once, from botAdd, so a
+// baked value goes stale when a bot changes class - and the tier's published numbers are
+// asserted exactly above, which is what keeps the two axes independent.
+// ⚠️ Its own Player: the one above is destroyed right after the knob table, and reusing
+// it here reads every field as "Unknown variable" and stops the suite mid-run.
+aimProbe = instance_create(0, 0, Player);
+botSkillApply(aimProbe, 0.15);
+aimProbe.class = CLASS_SOLDIER;
+test_assert_equals(4, aimProbe.botAimErrorDeg);
+aimProbe.class = CLASS_HEAVY;
+test_assert_equals(4, aimProbe.botAimErrorDeg);
+with(aimProbe)
+    instance_destroy();
 
 // A period of 0 is not a slower defender, it is `mod 0` - a hard error in botRoleAssign
 // on the first bot of that class to join.

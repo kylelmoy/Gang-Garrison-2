@@ -59,6 +59,37 @@
 ///                        FLANK. See below.
 ///   BOT_CP_SPOT_HIGH     botObjectiveUpdate. How much this class values height when
 ///                        choosing that position, in botGoalSpot's highBonus units.
+///   BOT_CP_AIM_ERR       botCombatUpdate. Multiplier on this class's angular aim error,
+///                        applied to botAimErrorDeg and botAimConeDeg together. 1 is the
+///                        tier's own number and is the default.
+///   BOT_CP_AIM_SETTLE    botCombatUpdate. Multiplier on BOT_AIM_SETTLE_DEG - how nearly
+///                        the slew has to have caught up with the solved aim before the
+///                        trigger is allowed. Above 1 is a class that shoots while still
+///                        turning.
+///
+/// ⚠️ The two aim fields are multipliers applied where the knob is USED, not written into
+/// the knob by botSkillApply. Two reasons. botSkillApply runs once, from botAdd, so a
+/// value baked in there goes stale the moment a bot's class changes; and the difficulty
+/// tier and the class are meant to be independent axes - test_botskill asserts the tier's
+/// published numbers land on the Player exactly, and they still do. This is the same
+/// shape as BOT_CP_SPLASH, which is the class half of a test whose other half is the
+/// difficulty knob botSplashAim.
+///
+/// The aim-error assignments, and why they are opposite:
+///
+///   Soldier (0.6)   Four rockets in a clip, a slow reload, and a projectile that does
+///                   most of its damage on a direct hit. The solver behind it is already
+///                   a full iterated intercept validated against a forward simulation
+///                   (botAimLead), so what limits a Soldier is the error sprayed on top
+///                   of a good answer. This is "make every shot count", and it is the
+///                   whole of it - botLeadMode is already BOT_LEAD_FULL at every tier
+///                   (M7 3.4), so there is nothing left to ungate there.
+///   Heavy (1.6)     The opposite request, and it is not a handicap. The Minigun fires a
+///                   continuous stream at 200 hp of health; a Heavy that lands every
+///                   bullet is a hitscan sniper with no counterplay, and area denial does
+///                   not want a tight cone. Paired with a loose settle (2.0), so it opens
+///                   up while still turning rather than tracking silently and then
+///                   deleting someone.
 ///
 /// The positioning modes, and the reasoning behind each assignment:
 ///
@@ -159,6 +190,19 @@ switch(field)
         if(class == CLASS_DEMOMAN)
             return BOT_SPOT_STANDOFF;
         return BOT_SPOT_NONE;
+
+    case BOT_CP_AIM_ERR:
+        if(class == CLASS_SOLDIER)
+            return BOT_CP_AIM_ERR_TIGHT;
+        if(class == CLASS_HEAVY)
+            return BOT_CP_AIM_ERR_LOOSE;
+        return 1;
+
+    case BOT_CP_AIM_SETTLE:
+        // Area denial does not want to wait for the slew to catch up at all.
+        if(class == CLASS_HEAVY)
+            return BOT_CP_SETTLE_LOOSE;
+        return 1;
 
     case BOT_CP_SPOT_HIGH:
         // A Sniper values height more than anything else does: elevation is what turns a

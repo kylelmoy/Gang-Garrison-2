@@ -51,7 +51,7 @@
 /// rather than a difficulty knob: without it bots are unbeatable in a brawl.
 
 var player, char, tick, range, keepRange, target, subject, subjectIsAlly, valid, dist;
-var keys, moving, err, sinceSeen, canAim, canFire, settled;
+var keys, moving, err, errMult, sinceSeen, canAim, canFire, settled;
 var aimX, aimY, delta, subjX, subjY, tgtX, tgtY;
 
 player = argument0;
@@ -318,7 +318,14 @@ if(tick >= player.botAimAt)
                                         player.botLeadMode);
 
         moving = (abs(player.botSeeVX) > 0.5 or abs(player.botSeeVY) > 0.5);
-        err = botAimSpread(player.botAimErrorDeg, player.botAimConeDeg,
+        // The class multiplier is applied here rather than baked into the knob by
+        // botSkillApply: that script runs once from botAdd, so a baked value goes stale
+        // when a bot changes class, and the tier and the class are meant to be
+        // independent axes. Both halves of the error scale together - the cone is the
+        // same error immediately after acquiring, so scaling one without the other would
+        // make a class's aim change shape as it settles rather than just size.
+        errMult = botClassProfile(player.class, BOT_CP_AIM_ERR);
+        err = botAimSpread(player.botAimErrorDeg * errMult, player.botAimConeDeg * errMult,
                            player.botMoveErrMult, moving, sinceSeen, dist);
 
         player.botAimWant += (random(2) - 1) * err;
@@ -345,7 +352,11 @@ with(char)
 
 // --- 4. fire ------------------------------------------------------------------------
 
-settled = (abs(botAngleDelta(player.botAimWant, player.botAimDir)) <= BOT_AIM_SETTLE_DEG);
+// How nearly the slew has to have caught up before the trigger is allowed, scaled by
+// class: a Heavy laying down area denial should open up while still turning, where a
+// Soldier with four rockets should not.
+settled = (abs(botAngleDelta(player.botAimWant, player.botAimDir))
+           <= BOT_AIM_SETTLE_DEG * botClassProfile(player.class, BOT_CP_AIM_SETTLE));
 
 keys = botClassKeys(player, char, subject, dist, subjectIsAlly, tick);
 
