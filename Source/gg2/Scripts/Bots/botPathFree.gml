@@ -25,3 +25,6 @@ player.botEdgeFrom = -1;
 player.botEdgeTo = -1;
 player.botOffPathTicks = 0;
 player.botStuckTicks = 0;
+// A run-up belongs to one jump edge on one route. Left set across a re-plan it would
+// suppress the off-route detector for a route that no longer has that edge in it.
+player.botRunupAt = -1;

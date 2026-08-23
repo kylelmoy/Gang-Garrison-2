@@ -8,6 +8,10 @@
   <resource name="botPopulationUpdate" type="RESOURCE"/>
   <resource name="botFindTarget" type="RESOURCE"/>
   <resource name="botAimLead" type="RESOURCE"/>
+  <resource name="botWeaponBallistics" type="RESOURCE"/>
+  <resource name="botFallPredict" type="RESOURCE"/>
+  <resource name="botArcClear" type="RESOURCE"/>
+  <resource name="botStabWindow" type="RESOURCE"/>
   <resource name="botAimSolve" type="RESOURCE"/>
   <resource name="botOccupancyMap" type="RESOURCE"/>
   <resource name="botOccupancyAdd" type="RESOURCE"/>
@@ -18,6 +22,8 @@
   <resource name="botBlacklistEdge" type="RESOURCE"/>
   <resource name="botPathPlan" type="RESOURCE"/>
   <resource name="botPathKeys" type="RESOURCE"/>
+  <resource name="botJumpReach" type="RESOURCE"/>
+  <resource name="botRunupCol" type="RESOURCE"/>
   <resource name="botInputUpdate" type="RESOURCE"/>
   <resource name="botObjectiveUpdate" type="RESOURCE"/>
   <resource name="botSkillLerp" type="RESOURCE"/>

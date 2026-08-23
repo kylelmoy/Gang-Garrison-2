@@ -31,6 +31,7 @@
 var player, char, keys, here, size, cur, nxt, i, edgeRow, edgeType, found, moved;
 var mx, targetCol, tx, gx, n0, n1, c0, c1, takeoffCol, wantJump, dirToNext;
 var needVx, braking, tracking, flightTicks, jumpDist, jumpDir, jumpWantX, vAlong;
+var jumpNeed, landCol;
 
 player = argument0;
 char = player.object;
@@ -110,6 +111,27 @@ if(here >= 0)
             break;
         }
     }
+
+    // ⚠️ A run-up deliberately walks BACKWARDS along the route, and the forward-only
+    // search above cannot see that. Without this branch a bot that backs up to build
+    // speed lands on a node the route does not mention *ahead* of it, which the block
+    // below reads as a finished move that went somewhere else - so it fires
+    // botOffRouteFires and, on the second consecutive miss, blacklists the very edge it
+    // was preparing for. That is the single reason the obvious "just let it back up"
+    // fix is not a two-line change.
+    //
+    // botPathAt is deliberately NOT moved. The edge being prepared for has to stay the
+    // current one for the whole run-up, or the follower is handed a different edge half
+    // way through and steers to the wrong takeoff column.
+    //
+    // The suppression is unconditional rather than "found somewhere earlier on the
+    // route", because botRunupCol follows walk edges through the GRAPH and not along the
+    // route: the floor a bot needs to build speed on is often a surface the route never
+    // mentions, and that case is exactly the one worth allowing. What bounds it is not
+    // this test but botTakeoffTicks - the run-up is only ever entered from the takeoff
+    // gate, and BOT_TAKEOFF_PATIENCE ends it whether or not it worked.
+    if(!found and player.botRunupAt >= 0)
+        found = true;
 }
 
 // Standing on a surface the route does not mention is not a delay to ride out, it is a
@@ -254,9 +276,13 @@ cur = ds_list_find_value(player.botPath, player.botPathAt);
 nxt = ds_list_find_value(player.botPath, player.botPathAt + 1);
 
 // A new edge gets a fresh takeoff budget: BOT_TAKEOFF_PATIENCE is about one jump refusing
-// to happen, not about how long the bot has been walking.
+// to happen, not about how long the bot has been walking. A run-up belongs to the edge it
+// was started for and goes with it.
 if(cur != player.botEdgeFrom or nxt != player.botEdgeTo)
+{
     player.botTakeoffTicks = 0;
+    player.botRunupAt = -1;
+}
 
 player.botEdgeFrom = cur;
 player.botEdgeTo = nxt;
@@ -423,10 +449,39 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
     // shape as the n616 -> n575 wedge on the same map.
     vAlong = char.hspeed * jumpDir;
 
+    // How much ground this jump has to cover: takeoff column to the near column of the
+    // landing run, which is the first column the bot may touch down on.
+    //
+    // ⚠️ From the takeoff COLUMN, not from char.x, and the difference is not cosmetic.
+    // The tracker's target is min(needVx*flightTicks, needVx*airTicks) measured from
+    // navColWorldX(takeoffCol), so needVx*flightTicks is a hard ceiling on how far the
+    // bot can be steered - past it the tracker brakes. Plenty of arcs are costed with no
+    // margin at all (koth_gallery n86 -> n58 is 0.70 px/tick over 17.2 ticks against a
+    // 12px gap: exactly 12 for exactly 12), so asking from char.x, which at the gate is
+    // up to BOT_JUMP_LEAD cells further out, asks for 22px of an arc that can never
+    // deliver more than 12. Measured live, that refuses the jump on every approach, runs
+    // up, comes back and refuses again - and it does it silently, with nothing
+    // blacklisted and nothing off route, because the bot is doing exactly what it was
+    // told. The gate's question is about the ARC and the GAP, both properties of the
+    // edge; where the bot is standing this tick is not part of it.
+    if(jumpDir > 0)
+        landCol = n0;
+    else
+        landCol = n1;
+    jumpNeed = abs(navColWorldX(landCol) - navColWorldX(takeoffCol));
+
     if(char.onground)
     {
         if(abs(mx - takeoffCol) <= BOT_JUMP_LEAD)
         {
+            // ⚠️ The budget was set in four places and incremented in none, so
+            // BOT_TAKEOFF_PATIENCE could never be reached and the escape hatch below has
+            // been dead code for its whole life. It is load-bearing now: the gate below
+            // can refuse for a reason other than "moving away", and a stricter gate
+            // WITHOUT a working escape hatch is exactly the bot the comment down there
+            // warns about - one that works the gate for the rest of the round.
+            player.botTakeoffTicks += 1;
+
             // At the gate. Three ways this can go, and only one of them is a jump.
             //
             // The budget counts ticks spent *here*, refusing to leave, and nothing but a
@@ -452,11 +507,35 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
             //
             // The upper tolerance is not slop. A steep arc can want less than 0.3px/tick and
             // a braking character oscillates either side of zero by about that much.
-            if(vAlong >= 0 and vAlong <= needVx + BOT_JUMP_VTOL)
+            //
+            // ⚠️ `vAlong >= 0` was the whole of the lower half of this test, and it accepts
+            // a STANDSTILL. That is right for nine arcs in ten and catastrophic for the
+            // rest: the generator proves an arc as a constant velocity from tick 0, a
+            // character accelerates from what it has, and an arc asking for most of the
+            // class's ceiling has no surplus for the tracker to make the ramp back out of.
+            // Measured over the twenty-three cached graphs, 3310 of 62069 jump edges are
+            // unflyable by a Heavy that way, and on koth_corinth 96% of a Heavy's routes to
+            // the point cross one. The bot flies it, lands short, blacklists the edge, and
+            // A* hands the identical route back 150 ticks later - forever.
+            //
+            // So the speed test is now "does this arc reach", asked of botJumpReach, which
+            // replays the tracker below against the speed the bot has right now. Demanding
+            // the arc's FULL speed instead was tried and lost (647 -> 868 ticks on the
+            // valley scenarios, no more arrivals) because it forces a run-up on every jump
+            // in the game; 91.9% of arcs need no takeoff speed at all and this leaves every
+            // one of them exactly as it was.
+            //
+            // vAlong >= 0 is kept on top of it. The reach model is honest about distance
+            // but knows nothing about the clearance cells the generator sampled along the
+            // arc, and a bot that leaves backwards and catches up flies through none of
+            // them.
+            if(vAlong >= 0 and vAlong <= needVx + BOT_JUMP_VTOL
+               and botJumpReach(char, needVx, flightTicks, vAlong) + BOT_JUMP_REACH_TOL >= jumpNeed)
             {
                 wantJump = true;
                 player.botAirTicks = 0;
                 player.botTakeoffTicks = 0;
+                player.botRunupAt = -1;
             }
             // Faster than the arc allows. Worth bleeding off even though the tracker can
             // correct it: with no key held GG2 sheds horizontal speed by only about 13% a
@@ -468,15 +547,23 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
             // which is usually a ledge, and jumping anyway is what produced the short arcs
             // in the first place - the bot arcs out with its old momentum still on it and
             // lands back where it started. Reported from play at ctf_truefort 4470,840.
-            // Clamped into this node's own columns so the run-up never steps off the far end
-            // either.
+            //
+            // ⚠️ This used to clamp the run-up into [c0, c1] - this node's own columns -
+            // and that clamp was the bug the whole change is about. A node one anchor
+            // column wide, which is what the top step of a staircase is, resolves the
+            // clamp back to the column the bot is already standing on, so the run-up was
+            // a no-op and the jump happened from a standstill anyway. botRunupCol follows
+            // WALK edges instead, which are one continuous floor by construction, and
+            // stops at the last column with something under it. Modelled offline first:
+            // 3310 unflyable jump edges -> 253, and koth_gallery's 105 -> 0.
+            //
+            // Resolved once per edge and remembered, because it walks the graph. It is
+            // cleared on takeoff, on a change of edge, and by the escape hatch below.
             else
             {
-                targetCol = takeoffCol - jumpDir * BOT_RUNUP_CELLS;
-                if(targetCol < c0)
-                    targetCol = c0;
-                if(targetCol > c1)
-                    targetCol = c1;
+                if(player.botRunupAt < 0)
+                    player.botRunupAt = botRunupCol(char, cur, takeoffCol, jumpDir, BOT_RUNUP_CELLS);
+                targetCol = player.botRunupAt;
             }
 
             // ⚠️ The escape hatch, because a gate that can refuse is a gate that can refuse
@@ -493,7 +580,25 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
                 braking = false;
                 player.botAirTicks = 0;
                 player.botTakeoffTicks = 0;
+                player.botRunupAt = -1;
             }
+        }
+        else if(player.botRunupAt >= 0)
+        {
+            // Backing up. Two halves, and the switch between them is what makes it a
+            // run-up rather than a retreat: walk to the mark, then turn round and
+            // accelerate at the takeoff column over the whole distance just walked.
+            //
+            // Arrival is BOT_ENTRY_LEAD rather than exact, for the same reason every
+            // other target column in this script is: a cell is 6 world px and a bot can
+            // sit inside any sane tolerance of a column without being on it.
+            if(abs(mx - player.botRunupAt) <= BOT_ENTRY_LEAD)
+            {
+                player.botRunupAt = -1;
+                targetCol = takeoffCol;
+            }
+            else
+                targetCol = player.botRunupAt;
         }
         else
         {

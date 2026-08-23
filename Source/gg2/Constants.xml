@@ -269,6 +269,18 @@
   <constant name="BOT_JUMP_VTOL" value="1"/>
   <constant name="BOT_RUNUP_CELLS" value="6"/>
   <constant name="BOT_TAKEOFF_PATIENCE" value="60"/>
+  <constant name="BOT_RUNUP_HOPS" value="8"/>
+  <constant name="BOT_JUMP_REACH_TOL" value="6"/>
+  <constant name="BOT_REST_SPEED" value="0.195"/>
+  <constant name="BOT_ARC_SAMPLES" value="10"/>
+  <constant name="BOT_STAB_LEAD_MIN" value="32"/>
+  <constant name="BOT_STAB_LEAD_MAX" value="38"/>
+  <constant name="BOT_STAB_REACH" value="37"/>
+  <constant name="BOT_STAB_BACK" value="26"/>
+  <constant name="BOT_AIRBLAST_MIN_TRAVEL" value="120"/>
+  <constant name="BOT_BALL_SPD" value="0"/>
+  <constant name="BOT_BALL_GRAV" value="1"/>
+  <constant name="BOT_BALL_DRIFT" value="2"/>
   <constant name="BOT_GEN_THREAT" value="4000"/>
   <constant name="BOT_SENTRY_BONUS" value="200"/>
   <constant name="BOT_ATTACKER_BONUS" value="150"/>

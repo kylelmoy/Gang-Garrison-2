@@ -137,6 +137,8 @@
     // ground; BOT_TAKEOFF_PATIENCE is what stops a gate that can refuse from refusing for
     // the rest of the round.
     botTakeoffTicks = 0;
+    // -1 is "no run-up in progress"; see botPathKeys' takeoff gate and the botRunupCol script.
+    botRunupAt = -1;
     // Set by botPathKeys while it is flying a jump edge's planned trajectory. Nothing may
     // touch the movement keys during that - the arc is a position per tick that the
     // generator validated, and any nudge in the air is permanent (M6 part 5) - so this is
