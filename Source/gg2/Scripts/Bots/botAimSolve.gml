@@ -51,7 +51,7 @@
 /// Quake III gates leading the same way, on aim_skill 0.4 and 0.8, and the difference is
 /// highly legible from the receiving end.
 
-var char, tx, ty, tvx, tvy, leadMode, weapon, spd, grav, drift, t0;
+var char, tx, ty, tvx, tvy, leadMode, spd, grav, drift, t0;
 var tfloor, node;
 
 char = argument0;
@@ -61,55 +61,12 @@ tvx = argument3;
 tvy = argument4;
 leadMode = argument5;
 
-spd = 0;
-grav = 0;
-drift = 0;
-
-if(instance_exists(char.currentWeapon))
-{
-    weapon = char.currentWeapon.object_index;
-
-    if(weapon == Scattergun or weapon == Shotgun)
-    {
-        // Both do shot.hspeed += owner.hspeed, so the shooter's own run carries.
-        spd = 13;
-        grav = 0.15;
-        drift = char.hspeed;
-    }
-    else if(weapon == Minigun)
-    {
-        spd = 12.5;
-        grav = 0.15;
-        drift = char.hspeed;
-    }
-    else if(weapon == Revolver)
-    {
-        // Also does speed += owner.hspeed*hspeed/15 - a speed change rather than a
-        // direction one, so it perturbs the flight time and not the aim line.
-        spd = 21;
-        grav = 0.15;
-    }
-    else if(weapon == Rocketlauncher)
-    {
-        spd = 12;
-        grav = 0;
-    }
-    else if(weapon == Minegun)
-    {
-        spd = 12;
-        grav = 0.2;
-    }
-    else if(weapon == Flamethrower)
-    {
-        spd = 8.25;
-        grav = 0.15;
-    }
-    else if(weapon == Blade)
-    {
-        spd = 10;
-        grav = 0;
-    }
-}
+// The weapon's own numbers, from botWeaponBallistics - which is where this table used
+// to be written out inline. botArcClear needs the same three, and two copies of them is
+// how the aim solve and the clearance test end up firing at different parabolas.
+spd = botWeaponBallistics(char, BOT_BALL_SPD);
+grav = botWeaponBallistics(char, BOT_BALL_GRAV);
+drift = botWeaponBallistics(char, BOT_BALL_DRIFT);
 
 if(spd <= 0)
     return point_direction(char.x, char.y, tx, ty);

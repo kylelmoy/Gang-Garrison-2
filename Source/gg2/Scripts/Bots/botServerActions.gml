@@ -39,6 +39,19 @@ else if(player.class == CLASS_ENGINEER)
 }
 else if(player.class == CLASS_HEAVY)
 {
-    if(target == noone and char.hp <= char.maxHp * BOT_EAT_HP_FRACTION)
+    // Three conditions, and the middle one is the change. `target == noone` was the whole
+    // test, which is wrong in both directions: botCombatUpdate keeps a target for 30 ticks
+    // after the sightline breaks (M7 3.8), so a Heavy that has just lost sight of someone
+    // is "in a fight" for a second by this test and eats nothing - and a Heavy already on
+    // the end of a Medic's beam wastes the sandvich on healing it is getting for free.
+    //
+    // So: hurt, nobody is actually healing it, and nothing VISIBLE to shoot at. char.healer
+    // is the field the Medigun sets to its own ownerPlayer and clears back to -1, so the
+    // test is `< 0` and NOT `!healer` - -1 is perfectly true in GML and that spelling would
+    // read every unhealed Heavy as healed. serverEatSandvich re-checks its own
+    // preconditions, so a wrong guess here is ignored rather than harmful.
+    if(char.hp <= char.maxHp * BOT_EAT_HP_FRACTION
+       and char.healer < 0
+       and (target == noone or !player.botVisible))
         serverEatSandvich(player, playerId);
 }

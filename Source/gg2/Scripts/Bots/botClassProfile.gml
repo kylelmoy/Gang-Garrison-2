@@ -62,7 +62,8 @@
 ///
 /// The positioning modes, and the reasoning behind each assignment:
 ///
-///   STANDOFF (Sniper, Heavy)  stand back from the objective, inside the weapon's reach and
+///   STANDOFF (Sniper, Heavy,  stand back from the objective, inside the weapon's reach and
+///             Demoman)
 ///                             with line of sight to it. A Sniper's whole kit is a 900 px
 ///                             sightline and a charge that wants three and a half seconds
 ///                             of standing still; walking onto the point is the one thing
@@ -149,6 +150,14 @@ switch(field)
             return BOT_SPOT_CHOKE;
         if(class == CLASS_SPY)
             return BOT_SPOT_FLANK;
+        // The Demoman's Minegun sags ~178px over 500px, so its shots are worth most from
+        // the far end of its band and worst point-blank, where its own blast radius is the
+        // thing that kills it. It was BOT_SPOT_NONE for no stated reason. STANDOFF derives
+        // its band from botClassRange and already exists, which is why this is a row in a
+        // table rather than a new mode: the alternative was raising botClassMinBand for the
+        // Demoman alone, and that constant means self-harm, not preference.
+        if(class == CLASS_DEMOMAN)
+            return BOT_SPOT_STANDOFF;
         return BOT_SPOT_NONE;
 
     case BOT_CP_SPOT_HIGH:

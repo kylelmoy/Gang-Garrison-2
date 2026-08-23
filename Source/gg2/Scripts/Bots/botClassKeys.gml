@@ -28,6 +28,7 @@
 /// a chokepoint (botServerActions).
 
 var player, char, subject, dist, subjectIsAlly, tick, keys, weapon, enemyNear;
+var arcSpd, arcClear;
 
 player = argument0;
 char = argument1;
@@ -43,17 +44,46 @@ tick = argument5;
 keys = 0;
 weapon = char.currentWeapon;
 
+// Does the shot this bot is lined up on actually have a path to what it is aimed at?
+//
+// Nothing in the bot layer ever asked. Every sight test in Scripts/Bots is a straight
+// chest-to-chest collision_line_bulletblocking, while botAimSolve deliberately aims ABOVE
+// the target to compensate for drop - ~178px of it at 500px for a Minegun round. So a
+// Demoman with a clear straight line to a target across a room is aiming a whole storey
+// above it, and indoors that is the reported "sometimes shooting at the ceiling", stated
+// as a mechanism rather than as a symptom. It is the same test for the Soldier's wasted
+// low-ceiling rocket, which is why it is computed once here rather than in two branches.
+//
+// Only for the two classes whose shot kills them if it goes off next to them, and only
+// with a subject to aim at. Everyone else pays nothing: a Scattergun round that clips a
+// lintel costs ammo the class has plenty of, and withholding would make a Scout stop
+// firing in exactly the corridors it wants to be firing in.
+arcClear = true;
+if(subject != noone and (player.class == CLASS_SOLDIER or player.class == CLASS_DEMOMAN))
+{
+    arcSpd = botWeaponBallistics(char, BOT_BALL_SPD);
+    if(arcSpd > 0)
+        arcClear = botArcClear(char, char.aimDirection, arcSpd,
+                               botWeaponBallistics(char, BOT_BALL_GRAV),
+                               subject.x, subject.y);
+}
+
 switch(player.class)
 {
     case CLASS_SOLDIER:
         // Rockets fly flat and hurt whoever is standing next to the impact, including
-        // the shooter.
-        if(subject != noone and dist >= botClassMinBand(CLASS_SOLDIER))
+        // the shooter. Flat means arcClear is very nearly the straight-line test the
+        // target search already passed - but not quite, because a rocket fired with lead
+        // does not go down the line the target was cleared on.
+        if(subject != noone and dist >= botClassMinBand(CLASS_SOLDIER) and arcClear)
             keys |= KEY_ATTACK;
         break;
 
     case CLASS_DEMOMAN:
-        if(subject != noone and dist >= botClassMinBand(CLASS_DEMOMAN))
+        // Withholding rather than re-solving for a flatter shot is deliberate for v1: a
+        // flatter solution generally means closing the distance, and where this bot stands
+        // is botGoalSpot's decision, not this script's.
+        if(subject != noone and dist >= botClassMinBand(CLASS_DEMOMAN) and arcClear)
             keys |= KEY_ATTACK;
 
         // SPECIAL detonates every mine this bot has out at once, so it is worth pressing
@@ -84,7 +114,8 @@ switch(player.class)
         // spending it on empty air.
         if(instance_exists(weapon))
         {
-            if(weapon.ammoCount >= 40 and botIncomingProjectile(char, BOT_AIRBLAST_RANGE))
+            if(weapon.ammoCount >= 40
+               and botIncomingProjectile(char, BOT_AIRBLAST_RANGE, BOT_AIRBLAST_MIN_TRAVEL))
                 keys |= KEY_SPECIAL;
         }
         break;
@@ -106,9 +137,22 @@ switch(player.class)
         break;
 
     case CLASS_SPY:
-        // Cloaked, and close enough to be behind someone: try the stab, which is the
-        // ordinary attack while cloaked.
-        if(char.cloak and subject != noone and dist <= BOT_STAB_RANGE)
+        // Cloaked, and the target is predicted to be standing in the knife when the knife
+        // exists: try the stab, which is the ordinary attack while cloaked.
+        //
+        // ⚠️ The old test was `dist <= BOT_STAB_RANGE` - where the enemy is NOW. The
+        // hitbox does not exist until 32 ticks after the press (Revolver's alarm[1],
+        // StabreloadTime), lives 6 more, and the Spy is frozen in place for all of it
+        // (the press sets owner.runPower and owner.jumpStrength to 0). So that press was
+        // aimed a full second early: against anything moving it was close to a guaranteed
+        // miss, and it spent 38 frozen ticks in the open to take it. botStabWindow asks
+        // about ticks 32-38 instead, and refuses when nothing is predicted to arrive.
+        //
+        // readyToStab is checked here rather than inside botStabWindow because it is much
+        // the cheaper of the two and gates the press regardless of geometry.
+        if(char.cloak and subject != noone and !subjectIsAlly
+           and instance_exists(weapon) and weapon.readyToStab
+           and botStabWindow(char, subject))
             keys |= KEY_ATTACK;
         else
         {

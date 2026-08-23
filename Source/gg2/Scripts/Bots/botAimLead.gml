@@ -70,7 +70,6 @@
 /// point_direction instead. botAimSolve is what makes that call.
 
 var sx, sy, tx, ty, tvx, tvy, spd, grav, drift, tfloor, i, t, ax, ay;
-var tClamp, tyPred;
 
 sx = argument0;
 sy = argument1;
@@ -90,22 +89,11 @@ for(i = 0; i < BOT_AIM_ITERATIONS; i += 1)
     t = min(max(t, 1), BOT_AIM_MAX_TICKS);
     ax = tx + (tvx - drift) * t;
 
-    // The target's own fall: the same terminal-velocity-clamped closed form as
-    // navJumpHeight, generalised from a standing jump (v0 = NAV_JUMP_V0) to an
-    // arbitrary starting vertical speed tvy.
-    if(tvy < NAV_JUMP_TERM_VY)
-        tClamp = (NAV_JUMP_TERM_VY - tvy) / NAV_JUMP_GRAVITY;
-    else
-        tClamp = 0;
-    if(t <= tClamp)
-        tyPred = ty + tvy * t + NAV_JUMP_GRAVITY * t * t / 2;
-    else
-        tyPred = ty + tvy * tClamp + NAV_JUMP_GRAVITY * tClamp * tClamp / 2
-                 + NAV_JUMP_TERM_VY * (t - tClamp);
-    if(tyPred > tfloor)
-        tyPred = tfloor;
-
-    ay = tyPred - grav * t * (t + 1) / 2;
+    // The target's own fall, from botFallPredict: the terminal-velocity-clamped closed
+    // form navJumpHeight uses, generalised to an arbitrary starting tvy and then clamped
+    // at the floor. Written out here twice - once in this loop and once to re-derive the
+    // settled answer below - until botStabWindow needed the same prediction.
+    ay = botFallPredict(ty, tvy, t, tfloor) - grav * t * (t + 1) / 2;
     t = point_distance(sx, sy, ax, ay) / spd;
 }
 
@@ -113,17 +101,6 @@ for(i = 0; i < BOT_AIM_ITERATIONS; i += 1)
 // solved for rather than the one before it.
 t = min(max(t, 1), BOT_AIM_MAX_TICKS);
 ax = tx + (tvx - drift) * t;
-if(tvy < NAV_JUMP_TERM_VY)
-    tClamp = (NAV_JUMP_TERM_VY - tvy) / NAV_JUMP_GRAVITY;
-else
-    tClamp = 0;
-if(t <= tClamp)
-    tyPred = ty + tvy * t + NAV_JUMP_GRAVITY * t * t / 2;
-else
-    tyPred = ty + tvy * tClamp + NAV_JUMP_GRAVITY * tClamp * tClamp / 2
-             + NAV_JUMP_TERM_VY * (t - tClamp);
-if(tyPred > tfloor)
-    tyPred = tfloor;
-ay = tyPred - grav * t * (t + 1) / 2;
+ay = botFallPredict(ty, tvy, t, tfloor) - grav * t * (t + 1) / 2;
 
 return point_direction(sx, sy, ax, ay);
