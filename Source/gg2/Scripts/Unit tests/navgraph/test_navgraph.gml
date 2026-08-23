@@ -46,9 +46,14 @@ if(variable_global_exists("navReady"))
 // ---------------------------------------------------------------------------
 // A single flat floor produces exactly one surface.
 //
-// 20x20, solid from row 15 down. The character box needs 7 clear rows, so the only
-// standable anchor row is y = 8: rows 8..14 are clear and row 15 (just under the box)
-// is solid. y = 9 would put the box's bottom row inside the floor.
+// 20x20, solid from row 15 down. The character box needs NAV_BOX_H clear rows, so the
+// only standable anchor row is 15 - NAV_BOX_H: that row and the NAV_BOX_H - 1 below it
+// are clear, and row 15 (just under the box) is solid. One lower would put the box's
+// bottom row inside the floor.
+//
+// Written as an expression rather than the number it comes to, here and everywhere else
+// in this suite, because NAV_BOX_H has changed once already - 7 to 6 in 8e30e213 - and
+// took 54 hand-computed assertions with it.
 // ---------------------------------------------------------------------------
 w = 20;
 h = 20;
@@ -60,7 +65,7 @@ freeGrid = navClearanceBuild(solidGrid, w, h);
 nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
 
 test_assert_equals(1, global.navNodeCount);
-test_assert_equals(8, ds_grid_get(nodes, NAV_NODE_Y, 0));
+test_assert_equals(15 - NAV_BOX_H, ds_grid_get(nodes, NAV_NODE_Y, 0));
 test_assert_equals(0, ds_grid_get(nodes, NAV_NODE_X0, 0));
 test_assert_equals(w - NAV_BOX_W, ds_grid_get(nodes, NAV_NODE_X1, 0));
 
@@ -100,8 +105,9 @@ ds_grid_destroy(solidGrid);
 //
 // 30x24. Left platform solid from row 16, right platform from row 15 - exactly one
 // mask cell (6 world px) higher, which characterHitObstacle steps up for free (F24).
-// The two surfaces come out as y=8 spanning x 12..26 and y=9 spanning x 0..11, which
-// touch horizontally, so they get one bidirectional walk connection.
+// The two surfaces come out at 15 - NAV_BOX_H spanning x 12..26 and 16 - NAV_BOX_H
+// spanning x 0..11, which touch horizontally, so they get one bidirectional walk
+// connection.
 // ---------------------------------------------------------------------------
 w = 30;
 h = 24;
@@ -115,8 +121,8 @@ nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
 edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
 
 test_assert_equals(2, global.navNodeCount);
-test_assert_equals(8, ds_grid_get(nodes, NAV_NODE_Y, 0));
-test_assert_equals(9, ds_grid_get(nodes, NAV_NODE_Y, 1));
+test_assert_equals(15 - NAV_BOX_H, ds_grid_get(nodes, NAV_NODE_Y, 0));
+test_assert_equals(16 - NAV_BOX_H, ds_grid_get(nodes, NAV_NODE_Y, 1));
 
 // Two walk edges, one each way for the step, plus a one-way fall off the upper
 // surface left end down onto the lower one.
@@ -379,15 +385,16 @@ ds_grid_set_region(solidGrid, 20, 17, 27, 24, 1);        // crate, top at row 17
 freeGrid = navClearanceBuild(solidGrid, w, h);
 nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
 
-// The ground left of the crate, and the crate's top. Anchor rows are the surface row
-// minus NAV_BOX_H: 25 - 7 = 18 for the ground, 17 - 7 = 10 for the crate.
+// The ground left of the crate, and the crate's top. An anchor row is the surface row
+// minus NAV_BOX_H, so those are the two expressions below rather than the numbers they
+// happen to come to.
 groundNode = -1;
 crateNode = -1;
 for(ei = 0; ei < global.navNodeCount; ei += 1)
 {
-    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 18 and ds_grid_get(nodes, NAV_NODE_X0, ei) == 0)
+    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 25 - NAV_BOX_H and ds_grid_get(nodes, NAV_NODE_X0, ei) == 0)
         groundNode = ei;
-    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 10)
+    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 17 - NAV_BOX_H)
         crateNode = ei;
 }
 test_assert_equals(true, groundNode >= 0);
@@ -405,20 +412,29 @@ test_assert_equals(20, gx1 + NAV_BOX_W);
 // The end of the run flies it, given an arc slow enough. Handing navJumpTakeoff a source
 // span of one column pins it to that takeoff, with nowhere to step back to.
 nodeGrid = navNodeGrid(nodes, global.navNodeCount, w, h);
-test_assert_equals(gx1, navJumpTakeoff(freeGrid, nodeGrid, 18, gx1, gx1,
-                                       10, cx0, cx1, 1, w, h, crateNode));
+// ay and by are anchor rows, so they are the surface row minus NAV_BOX_H like every
+// other row in this suite. Passing the numbers they used to come to hands the search a
+// body one cell out of place, and what comes back is a different arc entirely - a
+// landing two columns further on, and a takeoff the ceiling case below no longer blocks.
+test_assert_equals(gx1, navJumpTakeoff(freeGrid, nodeGrid, 25 - NAV_BOX_H, gx1, gx1,
+                                       17 - NAV_BOX_H, cx0, cx1, 1, w, h, crateNode));
 
-// ...and it is slow, and it aims at the crate's nearest anchor rather than into it,
-// because at 48px of rise there is no time for anything else: every column of lead is a
-// faster arc, and a faster arc hits the crate's side. The landing being marginal here is
-// the geometry's doing, not a shortcut - a bot has to land its body's rightmost cell on
-// the crate's leftmost column, which is exactly the jump a player makes.
-test_assert_equals(cx0, global.navJumpLandCol);
+// ...and it lands two columns into the crate rather than on its very first one. What
+// limits the lead is the body clipping the crate's side on the way up, and the body is
+// NAV_BOX_H tall: at 7 it cleared the corner just barely and the only landing that worked
+// was the marginal one, cx0 itself. At 6 the same arc clears the corner sooner, so a
+// little more lead is affordable and the bot puts more of itself on the crate.
+//
+// Written as cx0 + 2 rather than 19 so it still says "two columns in" if the fixture
+// moves. It is pinned exactly rather than as a range because this is the assertion that
+// notices a flight-model change - the rise is unchanged at 48px either way, so a landing
+// that moves again means the arc moved, not the geometry.
+test_assert_equals(cx0 + 2, global.navJumpLandCol);
 
 // Given the whole run to choose from, the answer is the same one: stepping back only
 // lengthens the jump.
-takeoffCol = navJumpTakeoff(freeGrid, nodeGrid, 18, gx0, gx1,
-                            10, cx0, cx1, 1, w, h, crateNode);
+takeoffCol = navJumpTakeoff(freeGrid, nodeGrid, 25 - NAV_BOX_H, gx0, gx1,
+                            17 - NAV_BOX_H, cx0, cx1, 1, w, h, crateNode);
 test_assert_equals(gx1, takeoffCol);
 
 // And the edge generator emits the edge, carrying that takeoff column on it so the
@@ -470,15 +486,25 @@ ds_grid_destroy(solidGrid);
 // ---------------------------------------------------------------------------
 // Where the takeoff search does earn its place: a ceiling over the end of the run.
 //
-// The same crate, plus a stalactite hanging down to row 8 over the two columns the
-// character would be standing under at the run's end. The jump itself is unchanged and
-// perfectly possible - it is the first few ticks of the *rise* that hit the ceiling, and
-// nothing about the arc can fix that, because every jump in this game rises 57px whether
-// it needs to or not. Two columns further left there is headroom and the identical jump
-// is clean.
+// The same crate, plus a stalactite over the columns the character stands under at the
+// run's end. It is the first few ticks of the *rise* that hit it, and nothing about the
+// arc can fix that, because every jump in this game rises 57px whether it needs to or
+// not - so the search reports the jump as unflyable rather than inventing an arc for it.
 //
-// This is the shape the takeoff search is actually for: the obstruction is over the
-// takeoff, not over the landing, so no amount of aiming elsewhere helps.
+// WARNING: this case used to claim something stronger - that stepping two columns left
+// found headroom and flew the identical jump - and asserted a takeoff of 14. That is no
+// longer true, and measuring it is what showed why: with the corrected flight model,
+// column 16 is the ONLY viable takeoff onto this crate from anywhere on the run, ceiling
+// or no ceiling. Stepping back makes the same landing further away, which makes the arc
+// faster, which drives it into the crate's side - exactly what the no-ceiling case above
+// spends a paragraph explaining. So there is no ceiling depth that blocks the run's end
+// and leaves anywhere else flyable: it either clears everything or blocks everything.
+//
+// The step-back behaviour this was reaching for is genuinely covered, by the floating
+// shelf case below (koth_corinth's ramp), where the ceiling sits over the middle of a
+// wide run and both ends of it are open. What is left here is still worth pinning: an
+// obstruction over the only takeoff there is makes the jump impossible, and the search
+// says -1 instead of guessing.
 // ---------------------------------------------------------------------------
 w = 40;
 h = 40;
@@ -486,7 +512,17 @@ solidGrid = ds_grid_create(w, h);
 ds_grid_clear(solidGrid, 0);
 ds_grid_set_region(solidGrid, 0, 25, w - 1, h - 1, 1);   // ground, top at row 25
 ds_grid_set_region(solidGrid, 20, 19, 27, 24, 1);        // crate, top at row 19
-ds_grid_set_region(solidGrid, 14, 10, 16, 11, 1);        // overhang over columns 14-16
+// The underside is seven rows above the anchor row, which leaves six clear over the
+// character's head - enough to stand in, not enough for the first ticks of a 57px rise.
+// Written against NAV_BOX_H because that headroom is the whole premise of the test: at a
+// fixed row 11 a shorter body simply fits, the ceiling stops blocking anything, and the
+// case silently starts asserting that an unobstructed jump is unobstructed.
+// Six rows above the anchor row, which is one row lower than a standing body needs and
+// therefore into the first ticks of the rise. Tied to NAV_BOX_H because the headroom is
+// the whole premise: at a fixed row a shorter body simply fits, the ceiling stops
+// blocking anything, and the case quietly starts asserting that an unobstructed jump is
+// unobstructed.
+ds_grid_set_region(solidGrid, 14, 10, 16, 25 - NAV_BOX_H - 6, 1);   // overhang, cols 14-16
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
 nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, -1, w, h);
@@ -495,9 +531,9 @@ groundNode = -1;
 crateNode = -1;
 for(ei = 0; ei < global.navNodeCount; ei += 1)
 {
-    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 18 and ds_grid_get(nodes, NAV_NODE_X0, ei) == 0)
+    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 25 - NAV_BOX_H and ds_grid_get(nodes, NAV_NODE_X0, ei) == 0)
         groundNode = ei;
-    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 12 and ds_grid_get(nodes, NAV_NODE_X1, ei) >= 27)
+    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 19 - NAV_BOX_H and ds_grid_get(nodes, NAV_NODE_X1, ei) >= 27)
         crateNode = ei;
 }
 test_assert_equals(true, groundNode >= 0);
@@ -515,13 +551,26 @@ test_assert_equals(16, gx1);
 nodeGrid = navNodeGrid(nodes, global.navNodeCount, w, h);
 
 // From the run's end, blocked at every lead.
-test_assert_equals(-1, navJumpTakeoff(freeGrid, nodeGrid, 18, gx1, gx1,
-                                      12, cx0, cx1, 1, w, h, crateNode));
+test_assert_equals(-1, navJumpTakeoff(freeGrid, nodeGrid, 25 - NAV_BOX_H, gx1, gx1,
+                                      19 - NAV_BOX_H, cx0, cx1, 1, w, h, crateNode));
 
-// Given the run to search, it steps back and flies it.
-takeoffCol = navJumpTakeoff(freeGrid, nodeGrid, 18, gx0, gx1,
-                            12, cx0, cx1, 1, w, h, crateNode);
-test_assert_equals(14, takeoffCol);
+// ...and given the whole run to search, still blocked - there is nowhere to step back to
+// that both clears the ceiling and still reaches the crate. A search that answered
+// anything else here would be handing a bot an arc it cannot fly.
+takeoffCol = navJumpTakeoff(freeGrid, nodeGrid, 25 - NAV_BOX_H, gx0, gx1,
+                            19 - NAV_BOX_H, cx0, cx1, 1, w, h, crateNode);
+test_assert_equals(-1, takeoffCol);
+
+// Lift the ceiling by one row and the run's end flies it again, which is what makes the
+// two -1s above a statement about the ceiling rather than about the crate being out of
+// reach in the first place.
+// Clear the overhang's BOTTOM row only, leaving the rest of it hanging - so what changes
+// between the two answers is one row of headroom and nothing else.
+ds_grid_set_region(solidGrid, 14, 25 - NAV_BOX_H - 6, 16, 25 - NAV_BOX_H - 6, 0);
+ds_grid_destroy(freeGrid);
+freeGrid = navClearanceBuild(solidGrid, w, h);
+test_assert_equals(gx1, navJumpTakeoff(freeGrid, nodeGrid, 25 - NAV_BOX_H, gx0, gx1,
+                                       19 - NAV_BOX_H, cx0, cx1, 1, w, h, crateNode));
 test_assert_equals(true, global.navJumpLandCol >= cx0);
 test_assert_equals(true, global.navJumpLandCol <= cx1);
 
@@ -561,9 +610,9 @@ groundNode = -1;
 crateNode = -1;
 for(ei = 0; ei < global.navNodeCount; ei += 1)
 {
-    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 28)
+    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 35 - NAV_BOX_H)
         groundNode = ei;
-    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 19)
+    if(ds_grid_get(nodes, NAV_NODE_Y, ei) == 26 - NAV_BOX_H)
         crateNode = ei;
 }
 test_assert_equals(true, groundNode >= 0);
@@ -580,8 +629,8 @@ test_assert_equals(true, gx0 < cx0);
 test_assert_equals(true, cx1 < gx1);
 
 nodeGrid = navNodeGrid(nodes, global.navNodeCount, w, h);
-takeoffCol = navJumpTakeoff(freeGrid, nodeGrid, 28, gx0, gx1,
-                            19, cx0, cx1, 1, w, h, crateNode);
+takeoffCol = navJumpTakeoff(freeGrid, nodeGrid, 35 - NAV_BOX_H, gx0, gx1,
+                            26 - NAV_BOX_H, cx0, cx1, 1, w, h, crateNode);
 test_assert_equals(true, takeoffCol >= 0);
 // The takeoff the search finds is beside the shelf, not at either end of the
 // 40-plus-column run it searched - a landing column check alone would not tell
@@ -642,12 +691,20 @@ edges = navEdgesBuild(nodes, global.navNodeCount, freeGrid, -1, w, h);
 
 // Sorted by row, so 0 is the ledge, 1 the block, 2 the floor.
 test_assert_equals(3, global.navNodeCount);
-test_assert_equals(3, ds_grid_get(nodes, NAV_NODE_Y, 0));
-test_assert_equals(11, ds_grid_get(nodes, NAV_NODE_Y, 1));
-test_assert_equals(27, ds_grid_get(nodes, NAV_NODE_Y, 2));
+test_assert_equals(10 - NAV_BOX_H, ds_grid_get(nodes, NAV_NODE_Y, 0));
+test_assert_equals(18 - NAV_BOX_H, ds_grid_get(nodes, NAV_NODE_Y, 1));
+test_assert_equals(34 - NAV_BOX_H, ds_grid_get(nodes, NAV_NODE_Y, 2));
 test_assert_equals(17, ds_grid_get(nodes, NAV_NODE_X0, 0));
 test_assert_equals(w - NAV_BOX_W, ds_grid_get(nodes, NAV_NODE_X1, 0));
-test_assert_equals(16, ds_grid_get(nodes, NAV_NODE_X1, 1));
+// The block spans columns 8..19 and its run now reaches the last of them. What ends a
+// run is `support > 0` - one supported cell under the body is enough (navNodesExtract) -
+// so the limit here is the block's own right edge rather than the body's width.
+//
+// It used to stop at 16, and the difference is NAV_BOX_H rather than anything to do with
+// support: at the taller body the anchor row was one higher, and at columns 17..19 that
+// row ran into the ledge overhead, so those columns failed the clearance test instead.
+// A shorter body fits under the ledge, and the run reaches the edge it is standing on.
+test_assert_equals(19, ds_grid_get(nodes, NAV_NODE_X1, 1));
 
 hasUpperToBlock = false;
 hasUpperToFloor = false;
@@ -679,7 +736,7 @@ if(variable_global_exists("navEdgeIdx"))
 global.navEdgeIdx = testIdx;
 global.navReady = true;
 
-path = navFindPath(0, 2, TEAM_RED, false, -1, 0);
+path = navFindPath(0, 2, TEAM_RED, false, -1, -1);
 test_assert_equals(true, path >= 0);
 test_assert_equals(3, ds_list_size(path));
 ds_list_destroy(path);
@@ -796,8 +853,9 @@ ds_grid_destroy(solidGrid);
 // ---------------------------------------------------------------------------
 // A LeftDoor cell splits a run and blocks only the leftward crossing.
 //
-// Same flat floor as the very first case, but doorGrid marks x 13..14 (at the
-// anchor row, y=8) as NAV_DOOR_LEFT - "blocks players trying to go left"
+// Same flat floor as the very first case, but doorGrid marks x 13..14 at the anchor
+// row - 15 - NAV_BOX_H, the row a standing body's top occupies - as NAV_DOOR_LEFT,
+// "blocks players trying to go left"
 // (Character.events/Collision with LeftDoor.xml fires only on hspeed < 0). That
 // isolates the door's own footprint as its own node between the two halves of the
 // floor, and the rightward pair of same-row walk edges should exist, the leftward
@@ -824,7 +882,10 @@ ds_grid_set_region(solidGrid, 0, 15, w - 1, h - 1, 1);
 
 doorGrid = ds_grid_create(w, h);
 ds_grid_clear(doorGrid, NAV_DOOR_NONE);
-ds_grid_set_region(doorGrid, 13, 8, 14, 8, NAV_DOOR_LEFT);
+// The row matters: navNodesExtract reads the door grid at the anchor row, so a mark one
+// row off is a mark nothing ever sees - the floor stays a single node and every count
+// below it collapses. That is what happened when NAV_BOX_H went 7 to 6.
+ds_grid_set_region(doorGrid, 13, 15 - NAV_BOX_H, 14, 15 - NAV_BOX_H, NAV_DOOR_LEFT);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
 nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, doorGrid, -1, w, h);
@@ -882,8 +943,8 @@ freeGrid = navClearanceBuild(solidGrid, w, h);
 nodes = navNodesExtract(freeGrid, solidGrid, platformGrid, -1, -1, -1, w, h);
 
 test_assert_equals(2, global.navNodeCount);
-test_assert_equals(0, ds_grid_get(nodes, NAV_NODE_Y, 0));
-test_assert_equals(13, ds_grid_get(nodes, NAV_NODE_Y, 1));
+test_assert_equals(7 - NAV_BOX_H, ds_grid_get(nodes, NAV_NODE_Y, 0));
+test_assert_equals(20 - NAV_BOX_H, ds_grid_get(nodes, NAV_NODE_Y, 1));
 
 instance_create(48, 0, MoveBoxDown);
 
@@ -947,7 +1008,7 @@ global.navReady = true;
 // Three surfaces, and every one reachable from every other.
 test_assert_equals(3, global.navNodeCount);
 
-path = navFindPath(0, 2, TEAM_RED, false, -1, 0);
+path = navFindPath(0, 2, TEAM_RED, false, -1, -1);
 test_assert_equals(true, path >= 0);
 test_assert_equals(3, ds_list_size(path));
 test_assert_equals(0, ds_list_find_value(path, 0));
@@ -955,46 +1016,44 @@ test_assert_equals(2, ds_list_find_value(path, 2));
 ds_list_destroy(path);
 
 // A path to itself is one node, not zero and not a loop.
-path = navFindPath(1, 1, TEAM_RED, false, -1, 0);
+path = navFindPath(1, 1, TEAM_RED, false, -1, -1);
 test_assert_equals(1, ds_list_size(path));
 ds_list_destroy(path);
 
 // Out of range asks are refused rather than clamped.
-test_assert_equals(-1, navFindPath(0, 99, TEAM_RED, false, -1, 0));
-test_assert_equals(-1, navFindPath(-1, 0, TEAM_RED, false, -1, 0));
+test_assert_equals(-1, navFindPath(0, 99, TEAM_RED, false, -1, -1));
+test_assert_equals(-1, navFindPath(-1, 0, TEAM_RED, false, -1, -1));
 
-// --- route variety: a per-bot cost jitter (M7 1.4) ------------------------------------
+// --- the search is deterministic, and takes no seed ------------------------------------
 //
-// The jitter must never change what a path *is* - only which of several equally valid
-// ones a given bot prefers. So the two things worth pinning are that a jittered search
-// still returns a real path from the start to the goal, and that the same seed returns
-// the identical one every time: the seed is a Player id, the same bot re-plans every
-// BOT_REPLAN_TICKS, and a jitter that moved between calls would re-route a bot mid-walk
-// for no reason at all, which is the failure mode the deterministic hash exists to
-// prevent. (An RNG-based jitter passes every other test here and fails exactly this one.)
-var jitPath, jitPath2, jitIdx;
+// A per-bot cost jitter used to live here (M7 1.4): navFindPath took a sixth argument that
+// multiplied each edge cost by up to NAV_PATH_JITTER, so that two bots with the same goal
+// picked different routes to it. It is gone, and the tests that pinned it with it.
+//
+// It was deleted for the wrong reason, which is worth writing down because the right one is
+// a stronger constraint on whatever replaces it. Replaying it offline against the real
+// cached graphs showed two things. First, it produced no variety at all: on the full
+// ctf_truefort blue leg every bot, seeded with a real Player instance id, got the
+// *identical* route, because per-edge noise is mean-reverting and cancels out over sixty
+// edges. Second, the closed set was not what returned the bad route - the same reproduction
+// gives the same answer with and without the re-open, because under the jittered costs the
+// longer route genuinely was cheaper. See navFindPath's header for both measurements.
+//
+// So what is pinned here is the property actually worth having: the same question gets the
+// same answer. Route variety came back as the shared occupancy penalty, pinned below.
+var detPath, detPath2, detIdx;
 
-jitPath = navFindPath(0, 2, TEAM_RED, false, -1, 12345);
-test_assert_equals(true, jitPath >= 0);
-test_assert_equals(0, ds_list_find_value(jitPath, 0));
-test_assert_equals(2, ds_list_find_value(jitPath, ds_list_size(jitPath) - 1));
+detPath = navFindPath(0, 2, TEAM_RED, false, -1, -1);
+test_assert_equals(true, detPath >= 0);
+test_assert_equals(0, ds_list_find_value(detPath, 0));
+test_assert_equals(2, ds_list_find_value(detPath, ds_list_size(detPath) - 1));
 
-jitPath2 = navFindPath(0, 2, TEAM_RED, false, -1, 12345);
-test_assert_equals(ds_list_size(jitPath), ds_list_size(jitPath2));
-for(jitIdx = 0; jitIdx < ds_list_size(jitPath); jitIdx += 1)
-    test_assert_equals(ds_list_find_value(jitPath, jitIdx), ds_list_find_value(jitPath2, jitIdx));
-ds_list_destroy(jitPath);
-ds_list_destroy(jitPath2);
-
-// A different seed is still a valid path. On a graph this small every route is the same
-// route, so what is asserted is validity rather than difference - the difference only has
-// somewhere to show up on a map with real alternatives, and asserting it here would be
-// asserting something about this fixture instead of about the code.
-jitPath = navFindPath(0, 2, TEAM_BLUE, false, -1, 99);
-test_assert_equals(true, jitPath >= 0);
-test_assert_equals(0, ds_list_find_value(jitPath, 0));
-test_assert_equals(2, ds_list_find_value(jitPath, ds_list_size(jitPath) - 1));
-ds_list_destroy(jitPath);
+detPath2 = navFindPath(0, 2, TEAM_RED, false, -1, -1);
+test_assert_equals(ds_list_size(detPath), ds_list_size(detPath2));
+for(detIdx = 0; detIdx < ds_list_size(detPath); detIdx += 1)
+    test_assert_equals(ds_list_find_value(detPath, detIdx), ds_list_find_value(detPath2, detIdx));
+ds_list_destroy(detPath);
+ds_list_destroy(detPath2);
 
 // --- botGoalSpot: "a place from which I can do X" (M7 tier 3) --------------------------
 //
@@ -1062,6 +1121,33 @@ test_assert_equals(-1, botGoalSpot(id, spotAnchorX, spotAnchorY, 100, 100, false
 test_assert_equals(spotAnchorX, global.botSpotX);
 test_assert_equals(spotAnchorY, global.botSpotY);
 
+// --- the occupancy penalty reaches the cost function ----------------------------------
+//
+// The contract navFindPath advertises: an edge listed in the occupancy map is charged
+// (1 + BOT_OCCUPANCY_COST * count) times its honest cost. The generated fixture above is
+// three surfaces in a row, so there is only one route from node 0 to node 2 - the wrong
+// shape for testing *which* route comes back, and the right shape for testing that a
+// crowded edge is still taken when it is the only way through.
+var occTest, occPath;
+
+occTest = ds_map_create();
+ds_map_add(occTest, navEdgeKey(0, 1), 4);
+
+// The penalty biases a choice; it never refuses one. That is what separates it from the
+// blacklist, which does refuse, and it is why a bot on a corridor map still gets a route.
+occPath = navFindPath(0, 2, TEAM_RED, false, -1, occTest);
+test_assert_equals(true, occPath >= 0);
+test_assert_equals(0, ds_list_find_value(occPath, 0));
+test_assert_equals(2, ds_list_find_value(occPath, ds_list_size(occPath) - 1));
+ds_list_destroy(occPath);
+
+// An empty map is the same as no map at all.
+ds_map_clear(occTest);
+occPath = navFindPath(0, 2, TEAM_RED, false, -1, occTest);
+test_assert_equals(true, occPath >= 0);
+ds_list_destroy(occPath);
+ds_map_destroy(occTest);
+
 global.navReady = false;
 global.navEdgeIdx = oldIdx;
 ds_grid_destroy(testIdx);
@@ -1070,6 +1156,128 @@ ds_grid_destroy(edges);
 ds_grid_destroy(nodes);
 ds_grid_destroy(freeGrid);
 ds_grid_destroy(solidGrid);
+
+// ---------------------------------------------------------------------------
+// The search is OPTIMAL, not merely fast: closed nodes are re-opened.
+//
+// This is the regression test ROUTEVARIETY.md listed as outstanding, and it needs a
+// hand-built node and edge grid rather than the generated stepped-platform fixture above,
+// because the shape it has to produce does not arise in generated geometry: a heuristic
+// that is admissible but INCONSISTENT, so a node is closed holding a bad g and a cheaper
+// route to it turns up afterwards.
+//
+// Consistency here is a statement about edge costs, not about the heuristic alone. The
+// heuristic is straight-line distance between node midpoints, and straight lines obey the
+// triangle inequality, so h(n) <= dist(n, n2) + h(n2) always holds - which means
+// h(n) <= cost(n, n2) + h(n2) holds for every edge charged at least the distance it spans,
+// and fails for any edge cheaper than the ground it covers. Real graphs have those: a fall
+// edge is charged its drop height while also moving sideways, so it spans more distance
+// than it is charged for. That is why the re-open fires on honest costs at all - the
+// ctf_truefort blue leg went from 68 nodes to 60 when it went in - and why the occupancy
+// penalty cannot be assumed safe without it.
+//
+// The fixture, four nodes:
+//
+//   n0 (0,2) --10--> n1 (10,0) --20--> n3 (20,0)
+//   n0       --1-->  n2 (1,1)  --1-->  n1
+//
+//   h to n3:    n0 20.10   n1 10   n2 19.03   n3 0
+//   true cost:  n0 22      n1 20   n2 21      n3 0
+//
+// Admissible everywhere (20.10 <= 22, 10 <= 20, 19.03 <= 21) and inconsistent on n2 -> n1,
+// where h(n2) = 19.03 is far more than cost 1 + h(n1) = 11.
+//
+// The search pops n0, then n1 at f = 10 + 10 = 20 - just ahead of n2 at f = 1 + 19.03 =
+// 20.03 - and closes n1 holding g = 10. Only then does n2 come off the queue offering n1 at
+// g = 2. A search that skips closed neighbours never hears it and answers n0 > n1 > n3 at
+// cost 30; the re-open takes it and answers n0 > n2 > n1 > n3 at cost 22.
+//
+// Delete the re-open in navFindPath and this case fails. That is the whole point of it.
+// ---------------------------------------------------------------------------
+var optNodes, optEdges, optIdx, optSaveIdx, optSaveNodes, optSaveEdges, optSaveCount, optPath;
+
+optNodes = ds_grid_create(NAV_NODE_FIELDS, 4);
+ds_grid_clear(optNodes, 0);
+// The row, then the x-span - one column wide each, so a node's midpoint is that column.
+ds_grid_set(optNodes, NAV_NODE_Y, 0, 2);
+ds_grid_set(optNodes, NAV_NODE_X0, 0, 0);
+ds_grid_set(optNodes, NAV_NODE_X1, 0, 0);
+ds_grid_set(optNodes, NAV_NODE_Y, 1, 0);
+ds_grid_set(optNodes, NAV_NODE_X0, 1, 10);
+ds_grid_set(optNodes, NAV_NODE_X1, 1, 10);
+ds_grid_set(optNodes, NAV_NODE_Y, 2, 1);
+ds_grid_set(optNodes, NAV_NODE_X0, 2, 1);
+ds_grid_set(optNodes, NAV_NODE_X1, 2, 1);
+ds_grid_set(optNodes, NAV_NODE_Y, 3, 0);
+ds_grid_set(optNodes, NAV_NODE_X0, 3, 20);
+ds_grid_set(optNodes, NAV_NODE_X1, 3, 20);
+
+// Sorted by NAV_EDGE_FROM, which navEdgeIndex requires and navEdgesBuild would guarantee.
+optEdges = ds_grid_create(NAV_EDGE_FIELDS, 4);
+ds_grid_clear(optEdges, 0);
+ds_grid_set(optEdges, NAV_EDGE_FROM, 0, 0);
+ds_grid_set(optEdges, NAV_EDGE_TO,   0, 1);
+ds_grid_set(optEdges, NAV_EDGE_COST, 0, 10);
+ds_grid_set(optEdges, NAV_EDGE_FROM, 1, 0);
+ds_grid_set(optEdges, NAV_EDGE_TO,   1, 2);
+ds_grid_set(optEdges, NAV_EDGE_COST, 1, 1);
+ds_grid_set(optEdges, NAV_EDGE_FROM, 2, 1);
+ds_grid_set(optEdges, NAV_EDGE_TO,   2, 3);
+ds_grid_set(optEdges, NAV_EDGE_COST, 2, 20);
+ds_grid_set(optEdges, NAV_EDGE_FROM, 3, 2);
+ds_grid_set(optEdges, NAV_EDGE_TO,   3, 1);
+ds_grid_set(optEdges, NAV_EDGE_COST, 3, 1);
+
+optSaveNodes = global.navNodes;
+optSaveEdges = global.navEdges;
+optSaveCount = global.navNodeCount;
+optSaveIdx = global.navEdgeIdx;
+
+global.navNodes = optNodes;
+global.navEdges = optEdges;
+global.navNodeCount = 4;
+optIdx = navEdgeIndex(optEdges, 4, 4);
+global.navEdgeIdx = optIdx;
+global.navReady = true;
+
+optPath = navFindPath(0, 3, TEAM_RED, false, -1, -1);
+test_assert_equals(true, optPath >= 0);
+// Four nodes, not three: the cheap way round rather than the dear direct edge.
+test_assert_equals(4, ds_list_size(optPath));
+test_assert_equals(0, ds_list_find_value(optPath, 0));
+test_assert_equals(2, ds_list_find_value(optPath, 1));
+test_assert_equals(1, ds_list_find_value(optPath, 2));
+test_assert_equals(3, ds_list_find_value(optPath, 3));
+ds_list_destroy(optPath);
+
+// The control: take the n2 -> n1 edge away and the dear direct edge is the only route
+// left, so the answer becomes n0 > n1 > n3. That is what confirms the four-node answer
+// above was a choice the search made rather than the only thing it could reach.
+//
+// Dropped by rebuilding the index over the first three edges rather than by retargeting
+// the fourth, and the difference is not cosmetic. Pointing n2 -> n1 at n3 instead does not
+// remove an alternative, it adds a better one - n0 > n2 > n3 costs 2 against the direct
+// route's 30 - so the search rightly took it and the assertion below failed on a graph
+// that no longer tested anything. The edges are sorted by NAV_EDGE_FROM, so the n2 edge is
+// last and a count of 3 is exactly "every edge except that one".
+ds_grid_destroy(optIdx);
+optIdx = navEdgeIndex(optEdges, 3, 4);
+global.navEdgeIdx = optIdx;
+
+optPath = navFindPath(0, 3, TEAM_RED, false, -1, -1);
+test_assert_equals(true, optPath >= 0);
+test_assert_equals(3, ds_list_size(optPath));
+test_assert_equals(1, ds_list_find_value(optPath, 1));
+ds_list_destroy(optPath);
+
+global.navReady = false;
+global.navNodes = optSaveNodes;
+global.navEdges = optSaveEdges;
+global.navNodeCount = optSaveCount;
+global.navEdgeIdx = optSaveIdx;
+ds_grid_destroy(optIdx);
+ds_grid_destroy(optEdges);
+ds_grid_destroy(optNodes);
 
 // ---------------------------------------------------------------------------
 // navGatePassable's truth table, straight off charSetSolids.gml.
@@ -1132,7 +1340,9 @@ ds_grid_set_region(solidGrid, 0, 15, w - 1, h - 1, 1);
 
 gateGrid = ds_grid_create(w, h);
 ds_grid_clear(gateGrid, NAV_GATE_NONE);
-ds_grid_set_region(gateGrid, 13, 0, 14, 8, NAV_GATE_TEAM_RED);
+// Full height down to the anchor row - see the door case above for why the bottom row
+// has to be derived from NAV_BOX_H rather than written out.
+ds_grid_set_region(gateGrid, 13, 0, 14, 15 - NAV_BOX_H, NAV_GATE_TEAM_RED);
 
 freeGrid = navClearanceBuild(solidGrid, w, h);
 nodes = navNodesExtract(freeGrid, solidGrid, -1, -1, -1, gateGrid, w, h);
@@ -1173,7 +1383,7 @@ global.navEdgeIdx = testIdx;
 global.navReady = true;
 
 // A red bot walks its own gate: floor, gate, floor.
-path = navFindPath(0, 2, TEAM_RED, false, -1, 0);
+path = navFindPath(0, 2, TEAM_RED, false, -1, -1);
 test_assert_equals(true, path >= 0);
 test_assert_equals(3, ds_list_size(path));
 test_assert_equals(1, ds_list_find_value(path, 1));
@@ -1181,13 +1391,13 @@ ds_list_destroy(path);
 
 // The same bot carrying the intel may not take its own gate out, and there is no way
 // round on this map.
-test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, true, -1, 0));
+test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, true, -1, -1));
 
 // Neither may a blue bot - including by the jump that hops the gate node.
-test_assert_equals(-1, navFindPath(0, 2, TEAM_BLUE, false, -1, 0));
+test_assert_equals(-1, navFindPath(0, 2, TEAM_BLUE, false, -1, -1));
 
 // But a blue bot that somehow starts inside the gate can still get out of it.
-path = navFindPath(1, 2, TEAM_BLUE, false, -1, 0);
+path = navFindPath(1, 2, TEAM_BLUE, false, -1, -1);
 test_assert_equals(true, path >= 0);
 test_assert_equals(2, ds_list_size(path));
 ds_list_destroy(path);

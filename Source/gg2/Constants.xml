@@ -234,6 +234,12 @@
   <constant name="BOT_SPLASH_SAFE" value="110"/>
   <constant name="BOT_FLAME_REACH" value="165"/>
   <constant name="BOT_AIRBLAST_RANGE" value="150"/>
+  <constant name="BOT_DODGE_RANGE" value="320"/>
+  <constant name="BOT_DODGE_TICKS" value="26"/>
+  <constant name="BOT_BODY_HALFW" value="12"/>
+  <constant name="BOT_BODY_UP" value="13"/>
+  <constant name="BOT_BODY_DOWN" value="23"/>
+  <constant name="BOT_ROCKET_RADIUS" value="8"/>
   <constant name="BOT_AIRBLAST_ARC" value="75"/>
   <constant name="BOT_HEAL_RANGE" value="300"/>
   <constant name="BOT_UBER_RANGE" value="200"/>
@@ -252,18 +258,21 @@
   <constant name="BOT_SPOT_HIGH_BONUS" value="1.5"/>
   <constant name="BOT_HOLD_RADIUS" value="260"/>
   <constant name="BOT_SPREAD_MAX" value="96"/>
+  <constant name="BOT_OCCUPANCY_COST" value="0.25"/>
   <constant name="BOT_MIN_ENGAGE" value="40"/>
   <constant name="BOT_POTSHOT_MULT" value="1.7"/>
   <constant name="BOT_POTSHOT_CHANCE" value="0.12"/>
   <constant name="BOT_REGROUP_TICKS" value="90"/>
-  <constant name="BOT_REGROUP_MATES" value="2"/>
+  <constant name="BOT_REGROUP_MATES" value="1"/>
   <constant name="BOT_REGROUP_RADIUS" value="300"/>
-  <constant name="BOT_DOUBLEJUMP_CHANCE" value="0.05"/>
-  <constant name="BOT_HOP_PERIOD" value="45"/>
+  <constant name="BOT_REGROUP_CROWD" value="3"/>
   <constant name="BOT_JUMP_VTOL" value="1"/>
   <constant name="BOT_RUNUP_CELLS" value="6"/>
   <constant name="BOT_TAKEOFF_PATIENCE" value="60"/>
   <constant name="BOT_GEN_THREAT" value="4000"/>
+  <constant name="BOT_SENTRY_BONUS" value="200"/>
+  <constant name="BOT_ATTACKER_BONUS" value="150"/>
+  <constant name="BOT_BLIND_RANGE" value="260"/>
   <constant name="BOT_PUSH_FRAC" value="0.4"/>
   <constant name="BOT_PUSH_DIST" value="400"/>
   <constant name="BOT_MEDIC_FOLLOW_RANGE" value="700"/>
@@ -288,5 +297,4 @@
   <constant name="BOT_DEFEND_AVERSE" value="6"/>
   <constant name="BOT_SPOT_NEAR_FRAC" value="0.5"/>
   <constant name="BOT_SPOT_HIGH_SNIPER" value="3"/>
-  <constant name="NAV_PATH_JITTER" value="0.35"/>
 </constants>

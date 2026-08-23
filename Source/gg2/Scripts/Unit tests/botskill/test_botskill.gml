@@ -414,10 +414,6 @@ for(k = 0; k < 6; k += 1)
     }
     roles = roles + string(probe.botRole);
 
-    // The route seed is what makes this bot's A* differ from its team-mates' (M7 1.4),
-    // and 0 is the "no jitter" sentinel every non-bot caller passes - so a bot must never
-    // be handed it, or route variety silently does nothing for that one bot.
-    test_assert_equals(true, probe.botRouteSeed != 0);
     // The goal spread is bounded, or a bot walks off to a point that has nothing to do
     // with the objective it was given (M7 2.4).
     test_assert_equals(true, abs(probe.botSpreadX) <= BOT_SPREAD_MAX);

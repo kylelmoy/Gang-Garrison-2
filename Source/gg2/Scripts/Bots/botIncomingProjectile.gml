@@ -1,34 +1,30 @@
-/// botIncomingProjectile(char, range, anyDirection)
-/// True if a dangerous enemy projectile is close, for two different callers with two
-/// different needs (M7 4.3 widened this from a Pyro-only primitive):
+/// botIncomingProjectile(char, range)
+/// True if a reflectable enemy projectile is close enough and roughly in front of this bot:
+/// the Pyro's airblast test, and now its only caller.
 ///
-///   anyDirection = false  the original airblast check: only the reflectable set
-///                         (Rocket, Flare, Mine - Flamethrower's User Event 2), and only
-///                         within BOT_AIRBLAST_ARC of where the bot is already aiming,
-///                         since airblast costs 40 ammo and only reflects what the
-///                         AirBlastO poof overlaps.
-///   anyDirection = true   the dodge check: also counts Shot, and drops the facing arc -
-///                         you dodge things behind you too, and a Scattergun blast is as
-///                         much a reason to jump as a Rocket is. Needle and Flame are left
-///                         out: weak enough per-hit and continuous enough that one jump
-///                         does not read as "dodging" them the way it does a single shot.
+/// The reflectable set is Rocket, Flare and Mine (Flamethrower's User Event 2), and the
+/// facing arc matters because airblast costs 40 ammo and only reflects what the AirBlastO
+/// poof actually overlaps - so a rocket behind the bot is not worth spending on.
+///
+/// This used to have a second mode that dropped the arc and counted Shot as well, for the
+/// evasive jump. That question turned out not to be a proximity question at all - see
+/// botRocketDodge, which models the arc instead - so the mode is gone and this is back to
+/// the one job it was written for.
 ///
 /// None of the projectile types share a parent object, so each needs its own pass. There
 /// are never many of any of them alive at once.
 
-var char, range, anyDirection, found, inArc;
+var char, range, found;
 
 char = argument0;
 range = argument1;
-anyDirection = argument2;
 found = false;
 
 with(Rocket)
 {
     if(ownerPlayer.team != char.team and point_distance(x, y, char.x, char.y) <= range)
     {
-        inArc = anyDirection or abs(botAngleDelta(point_direction(char.x, char.y, x, y), char.aimDirection)) <= BOT_AIRBLAST_ARC;
-        if(inArc)
+        if(abs(botAngleDelta(point_direction(char.x, char.y, x, y), char.aimDirection)) <= BOT_AIRBLAST_ARC)
             found = true;
     }
 }
@@ -37,8 +33,7 @@ with(Flare)
 {
     if(ownerPlayer.team != char.team and point_distance(x, y, char.x, char.y) <= range)
     {
-        inArc = anyDirection or abs(botAngleDelta(point_direction(char.x, char.y, x, y), char.aimDirection)) <= BOT_AIRBLAST_ARC;
-        if(inArc)
+        if(abs(botAngleDelta(point_direction(char.x, char.y, x, y), char.aimDirection)) <= BOT_AIRBLAST_ARC)
             found = true;
     }
 }
@@ -47,17 +42,7 @@ with(Mine)
 {
     if(ownerPlayer.team != char.team and point_distance(x, y, char.x, char.y) <= range)
     {
-        inArc = anyDirection or abs(botAngleDelta(point_direction(char.x, char.y, x, y), char.aimDirection)) <= BOT_AIRBLAST_ARC;
-        if(inArc)
-            found = true;
-    }
-}
-
-if(anyDirection)
-{
-    with(Shot)
-    {
-        if(ownerPlayer.team != char.team and point_distance(x, y, char.x, char.y) <= range)
+        if(abs(botAngleDelta(point_direction(char.x, char.y, x, y), char.aimDirection)) <= BOT_AIRBLAST_ARC)
             found = true;
     }
 }

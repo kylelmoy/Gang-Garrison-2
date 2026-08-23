@@ -34,12 +34,12 @@
 ///
 /// Two milestone 7 tier 3 additions ride on the same chain rather than beside it:
 ///
-/// - The target may be a **Generator** (6.3) and not a Character. It goes through every
-///   gate above unchanged - it is just something to shoot - but almost every field this
-///   script reads off a target exists only on a Character, so player.botTargetIsGen is
-///   consulted before each of them. GM8 does not short-circuit and/or, so those tests are
-///   separate ifs rather than extra clauses; reading `onground` off a generator is a hard
-///   error, not a false.
+/// - The target may not be a Character at all - a **Generator** (6.3) or a **Sentry**. It
+///   goes through every gate above unchanged, since it is just something to shoot, but
+///   almost every field this script reads off a target exists only on a Character, so
+///   player.botTargetIsChar is consulted before each of them. GM8 does not short-circuit
+///   and/or, so those tests are separate ifs rather than extra clauses; reading onground off
+///   a generator is a hard error, not a false.
 /// - A **potshot** (3.5) is an ordinary target acquired at a widened radius when there was
 ///   nothing in the ordinary one. It is only the *search* that widens; everything
 ///   afterwards, including the fire gates, is identical.
@@ -79,17 +79,17 @@ if(target != noone)
     valid = instance_exists(target);
     if(valid)
     {
-        // A Generator has hp and a team and nothing else this chain reads - no cloak, no
-        // onground, no player - so its checks are the Character ones minus the fields it
-        // does not have (M7 6.3). Getting that wrong is not a crash in GM8, it is a
-        // silent read of some other instance's variable.
-        if(player.botTargetIsGen)
-            valid = (target.hp > 0 and target.team != char.team);
-        else
+        // A Generator or a Sentry has hp and a team and nothing else this chain reads - no
+        // cloak, no onground, no player - so its checks are the Character ones minus the
+        // fields it does not have. Getting that wrong is not a crash in GM8, it is a silent
+        // read of some other instance's variable.
+        if(player.botTargetIsChar)
             valid = (target.hp > 0 and !target.cloak and target.team != char.team);
+        else
+            valid = (target.hp > 0 and target.team != char.team);
     }
     // Measured to the same point botFindTarget measured to when it picked this target -
-    // the middle of a Generator's body, the chest of a Character. Mixing the two would
+    // the middle of a map object's body, the chest of a Character. Mixing the two would
     // let a generator be acquired at its centre and dropped on its origin the next tick,
     // over and over, on any map where the two are far apart.
     tgtX = char.x;
@@ -98,7 +98,7 @@ if(target != noone)
     {
         tgtX = target.x;
         tgtY = target.y;
-        if(player.botTargetIsGen)
+        if(!player.botTargetIsChar)
         {
             tgtX = (target.bbox_left + target.bbox_right) / 2;
             tgtY = (target.bbox_top + target.bbox_bottom) / 2;
@@ -130,7 +130,7 @@ if(target != noone)
     {
         target = noone;
         player.botTarget = noone;
-        player.botTargetIsGen = false;
+        player.botTargetIsChar = true;
         player.botPotshot = false;
     }
 }
@@ -160,8 +160,7 @@ if(target == noone and (tick + player) mod BOT_TARGET_PERIOD == 0)
     if(target != noone)
     {
         player.botTarget = target;
-        player.botTargetIsGen = (target.object_index == GeneratorRed
-                                 or target.object_index == GeneratorBlue);
+        player.botTargetIsChar = botIsCharacter(target);
         // Continuous sight starts now: both the acquisition gate and the focus cone's
         // decay are measured from this tick.
         player.botTargetAt = tick;
@@ -170,7 +169,7 @@ if(target == noone and (tick + player) mod BOT_TARGET_PERIOD == 0)
         player.botHoldFire = false;
     }
     else
-        player.botTargetIsGen = false;
+        player.botTargetIsChar = true;
 }
 
 // --- the Medic exception: a hurt teammate outranks an enemy -------------------------
@@ -207,13 +206,22 @@ if(subject == noone)
     if((tick + player) mod BOT_TARGET_PERIOD == 0)
         botServerActions(player, char, noone, 0);
 
-    // Face the way you're moving (M7 3.1) - without this, aimDirection is never touched
-    // in this branch and keeps whatever stale bearing it last held, often at a target
-    // that died a screen away. Only turns while actually moving (the same 0.195 dead
-    // zone Character's own friction uses to call itself stopped), so standing still keeps
-    // the last-held aim rather than snapping to some arbitrary direction.
-    if(abs(char.hspeed) > 0.195 or abs(char.vspeed) > 0.195)
-        player.botAimWant = point_direction(0, 0, char.hspeed, char.vspeed);
+    // Face the way you're walking (M7 3.1) - without this, aimDirection is never touched in
+    // this branch and keeps whatever stale bearing it last held, often at a target that died
+    // a screen away.
+    //
+    // Squarely left or right, not along the velocity vector, which is what this used to do
+    // and what reads from outside as a bot staring at the floor as it walks downhill or at
+    // the sky on the way up a jump - reported from play as "bots seem to aim in the direction
+    // of their velocity". A player with nothing to shoot at holds the crosshair level and
+    // ahead, and a level aim is also the one that needs the least slewing when something
+    // does appear. Only the horizontal component decides the facing, and only while actually
+    // moving horizontally (the same 0.195 dead zone Character's own friction uses to call
+    // itself stopped), so standing still keeps the last-held aim rather than snapping.
+    if(char.hspeed > 0.195)
+        player.botAimWant = 0;
+    else if(char.hspeed < -0.195)
+        player.botAimWant = 180;
 
     delta = botAngleDelta(player.botAimWant, player.botAimDir);
     if(abs(delta) <= player.botTurnRate)
@@ -238,7 +246,7 @@ if(subject == noone)
 // correction botFindTarget and botObjectiveUpdate make about the same object.
 subjX = subject.x;
 subjY = subject.y;
-if(player.botTargetIsGen and !subjectIsAlly)
+if(!player.botTargetIsChar and !subjectIsAlly)
 {
     subjX = (subject.bbox_left + subject.bbox_right) / 2;
     subjY = (subject.bbox_top + subject.bbox_bottom) / 2;
@@ -291,7 +299,7 @@ if(tick >= player.botAimAt)
     // so folding it into the condition below would read onground off a generator every
     // time a Soldier shot one, which is a hard runtime error rather than a false. Its own
     // middle is already the best point on it, so there is nothing to offset anyway.
-    if(!player.botTargetIsGen)
+    if(player.botTargetIsChar)
     {
         if(player.botSplashAim and subject.onground
            and botClassProfile(player.class, BOT_CP_SPLASH))

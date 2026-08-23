@@ -32,7 +32,7 @@ if(botCount < target and spawningAllowed())
     repeat(target - botCount)
     {
         global.botNameCounter += 1;
-        botAdd(botPickTeam(), irandom(8), global.botNamePrefix + string(global.botNameCounter));
+        botAdd(botPickTeam(), botPickClass(), global.botNamePrefix + string(global.botNameCounter));
     }
     changed = true;
 }

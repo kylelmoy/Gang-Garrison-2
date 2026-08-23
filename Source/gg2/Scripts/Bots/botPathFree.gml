@@ -9,6 +9,12 @@
 var player;
 player = argument0;
 
+// Give up this bot's share of the team's edge occupancy counts first, because the counts
+// are read off the route and the route is about to be destroyed. Idempotent, so the
+// botPathPlan path - which takes its own route out of the counts before it searches, and
+// then calls in here - decrements once rather than twice.
+botOccupancyAdd(player, -1);
+
 if(player.botPath >= 0)
 {
     ds_list_destroy(player.botPath);

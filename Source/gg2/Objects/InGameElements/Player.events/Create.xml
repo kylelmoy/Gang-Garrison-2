@@ -30,6 +30,16 @@
     // botBlacklist own ds_ structures - botNavRelease is what gives them back.
     botPath = -1;
     botPathAt = 0;
+    // Set when the goal changed while a route to the old one was still installed. That route
+    // is kept so the bot keeps moving until a plan for the new goal exists (botSetGoal), and
+    // this is what stops botPathKeys treating the end of it as an arrival. Cleared by the
+    // first successful plan, which is normally the next tick.
+    botPathStale = false;
+    // Frame until which a failed search is not retried. Only consulted while a route is
+    // installed: a failed plan now keeps the old route rather than clearing it, so without
+    // this every event-driven caller in botPathKeys would re-run a full A* every tick for a
+    // goal that cannot be reached.
+    botPlanFailUntil = 0;
     botGoalX = 0;
     botGoalY = 0;
     botGoalNode = -1;
@@ -88,10 +98,17 @@
     // converge on one pixel (M7 2.4) - derived from the Player id, so it is constant for
     // this bot's whole life and different from its team-mates'.
     botSpreadX = 0;
-    // The seed navFindPath perturbs its edge costs with (M7 1.4). Non-zero means "this
-    // bot prefers slightly different routes to everyone else"; 0 disables it, which is
-    // what every non-bot caller and the unit suite pass.
-    botRouteSeed = 0;
+    // Whether this bot's installed route is currently counted in its team's edge
+    // occupancy map (botOccupancyAdd). The counts are what make a team fan out across
+    // the alternatives a map offers instead of filing down one route, and this flag is
+    // what keeps adding and removing them idempotent - the route is added in one place
+    // and removed in three, so without it a re-plan would decrement twice and leave a
+    // count negative, which would make a busy edge *cheaper* rather than dearer.
+    botOccupied = false;
+    // Which team's map those counts went into. Not always player.team by the time they
+    // come back out: ServerBalanceTeams moves a player between teams mid-round and can
+    // pick a bot, and botReteamAll reassigns every bot on a map change.
+    botOccupiedTeam = -1;
     // Whether the current goal came out of botGoalSpot rather than being the objective
     // itself, and until when spot goals are not to be tried again. botGoalSpot cannot
     // check reachability (it would cost an A* per candidate), so a spot in another
@@ -100,10 +117,12 @@
     // what keeps the goal layer from being able to make things worse than not having it.
     botGoalIsSpot = false;
     botSpotBanUntil = 0;
-    // Whether botTarget is a Generator rather than a Character. Almost every field the
-    // combat brain reads off a target - cloak, onground, player.class - only exists on a
-    // Character, so this is the flag that keeps those reads off a generator (M7 6.3).
-    botTargetIsGen = false;
+    // Whether botTarget is a player character rather than a piece of map furniture - a
+    // Generator or a Sentry. Almost every field the combat chain reads off a target exists
+    // only on a Character, so this gates each of those reads; botTargetIsChar is the script
+    // that decides it. True by default and whenever there is no target, so a stray read is a
+    // read of the Character fields rather than of nothing.
+    botTargetIsChar = true;
     // Set when the current target was acquired by the long-range potshot roll (M7 3.5),
     // which widens the band the target is allowed to stay valid in - otherwise the shot
     // would be taken and the target dropped again on the very next tick.
@@ -113,14 +132,6 @@
     // dead -> alive transition; nothing else needs it.
     botAliveLast = false;
     botRegroupUntil = 0;
-    // A Scout's second, mid-air jump (M7 4.1). Edge-triggered like every other jump, and
-    // spent once per airborne period so it cannot be fired twice on one arc.
-    botAirJumpUsed = false;
-    // The tick of the last *voluntary* hop - the blocked-shot peek and the ambient combat
-    // hop, both in botInputUpdate, which share BOT_HOP_PERIOD between them. A dodge away
-    // from a projectile that is actually in the air does not consult this: that one is a
-    // reflex, and throttling it would be throttling self-preservation.
-    botHopAt = 0;
     // Ticks spent on the ground failing to satisfy the current jump edge's takeoff gate.
     // botPathKeys zeroes it whenever the edge changes or the bot actually leaves the
     // ground; BOT_TAKEOFF_PATIENCE is what stops a gate that can refuse from refusing for

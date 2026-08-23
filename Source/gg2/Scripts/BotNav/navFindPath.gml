@@ -1,4 +1,4 @@
-/// navFindPath(startNode, goalNode, team, hasIntel, blocked, jitterSeed)
+/// navFindPath(startNode, goalNode, team, hasIntel, blocked, occupancy)
 /// A* over the built nav graph, for a character of `team` carrying the intel or not.
 /// Returns a ds_list of node indices from startNode to goalNode inclusive, or -1 if
 /// the goal is unreachable or the graph is not ready. The caller owns the returned
@@ -41,24 +41,62 @@
 /// least the straight-line distance they cover vertically, so they do not break it
 /// either.
 ///
-/// `jitterSeed` is route variety (M7 1.4), and 0 turns it off - which is what every
-/// non-bot caller and the whole unit suite pass, so a jittered search is opt-in and the
-/// deterministic one is still exactly the search it always was. Non-zero perturbs each
-/// edge's cost by up to NAV_PATH_JITTER of itself, as a pure function of (edge, seed):
-/// the same bot always gets the same answer for the same query, and two bots get
-/// different ones. That is most of what stops a team looking like a single-file column,
-/// for a fraction of the cost of the honest version (k-shortest paths, or real map
-/// knowledge).
+/// Closed nodes are RE-OPENED when a cheaper route to them turns up, which is what makes
+/// the search optimal rather than merely fast. Skipping an already-closed neighbour - which
+/// is what this did - is only sound when the heuristic is *consistent*, and consistency is
+/// a strictly stronger property than the admissibility the paragraph above establishes.
+/// It fires on honest costs too, which is worth knowing: the ctf_truefort blue leg went
+/// from 68 nodes to 60 when the re-open went in, so the heuristic was never quite as
+/// consistent as the paragraph above argues. It fires harder with `occupancy` below, which
+/// perturbs costs deliberately and makes the two properties come apart on purpose.
 ///
-/// The jitter only ever *raises* a cost, never lowers one, and that is deliberate rather
-/// than incidental: the heuristic is a straight-line lower bound on the unjittered cost,
-/// so costs that only grow keep it admissible and A* keeps returning an optimal path -
-/// optimal with respect to this bot's own slightly different idea of what things cost.
-/// A jitter that could subtract would break that quietly, and a broken heuristic does not
-/// look like a bug, it looks like a bot occasionally taking a stupid route.
-
-var startNode, goalNode, team, hasIntel, blocked, jitterSeed, openSet, gScore, cameFrom, closed;
-var current, nb, e, eStart, eCount, i, tentative, path, guard, cost, hash;
+/// A per-bot cost jitter (M7 1.4) used to multiply each edge by up to NAV_PATH_JITTER, and
+/// it was deleted. Replaying it offline against the real cached graphs corrected the reason
+/// twice over, and both corrections matter for anything that wants to perturb a cost here:
+///
+///   1. Per-edge noise cannot produce route variety at all. It is mean-reverting: over a
+///      sixty-edge route every candidate inflates by about the same average, so the ordering
+///      between long routes barely moves. On the full ctf_truefort blue leg all eight bots -
+///      seeded with real Player instance ids - got the *identical* 68-node route. The jitter
+///      did not fan the team out; it moved the whole team onto one slightly worse route.
+///   2. The closed set was not what returned it. Re-running the ctf_truefort n178 -> n177
+///      reproduction with and without the re-open gives the same answer at every seed,
+///      because under the jittered costs the three-hop route genuinely is cheaper (40.47
+///      against the direct jump's 42.54). A* was right; the costs it was given were not.
+///      The honest gap is 33.67 against 38.17, only 13% - well inside a 35% jitter. The
+///      54.67 that ROUTEVARIETY.md quotes charges n178 -> n196 at 17.50, the walk edge,
+///      when a parallel fall edge covers the same hop for 1.00.
+///
+/// The re-open below is still worth having on its own account - it took that leg from 68
+/// nodes to 60 on honest costs - but it is not what makes a perturbation safe. What makes
+/// one safe is being the *right shape*, and `occupancy` is the shape that works.
+///
+/// `occupancy` is a ds_map of navEdgeKey values to "how many bots on this team are already
+/// walking this edge", or -1 for none. An edge in it is charged
+/// (1 + BOT_OCCUPANCY_COST * count) times its honest cost, so a route that team-mates are
+/// already on costs more than one they are not, and a team fans out across whatever
+/// alternatives the map offers. Measured offline on ctf_truefort at BOT_OCCUPANCY_COST
+/// 0.25: eight bots go from one shared route to eight distinct ones, pairwise edge overlap
+/// 1.00 -> 0.23, nodes touched 60 -> 188, and the worst route only 1.23x the optimal.
+///
+/// It is the right shape for three reasons the jitter was the wrong shape for. It is
+/// *structured* rather than random, so what it makes expensive is exactly what is crowded.
+/// It is the same for every bot asking at the same moment, so it perturbs no one's view of
+/// the graph relative to anyone else's. And it is *coarse* - a handful of edges carry a
+/// count at all - so it moves whole routes rather than nudging the ordering of every edge
+/// in the graph at once.
+///
+/// It does still make the heuristic inconsistent, which is what the re-open below is for.
+/// Cost measured offline: 1.6x to 2.0x the pops of an unperturbed search, and *fewer*
+/// re-opens rather than more (113 -> 50 on the ctf_truefort blue leg) - the extra pops are
+/// a wider frontier, not thrashing.
+///
+/// Callers pass -1 rather than relying on the argument being absent. GM8 gives an unpassed
+/// argument the value 0, and 0 is a perfectly valid ds_map id, so a five-argument call would
+/// silently read whichever structure happens to own it.
+///
+var startNode, goalNode, team, hasIntel, blocked, occupancy, openSet, gScore, cameFrom, closed;
+var current, nb, e, eStart, eCount, i, tentative, path, guard, cost, eKey;
 var gx, gy, cx, cy, nx, ny;
 
 startNode = argument0;
@@ -66,7 +104,7 @@ goalNode = argument1;
 team = argument2;
 hasIntel = argument3;
 blocked = argument4;
-jitterSeed = argument5;
+occupancy = argument5;
 
 if(!global.navReady)
     return -1;
@@ -123,8 +161,8 @@ while(!ds_priority_empty(openSet))
         nb = ds_grid_get(global.navEdges, NAV_EDGE_TO, i);
         if(nb < 0 or nb >= global.navNodeCount)
             continue;
-        if(ds_grid_get(closed, 0, nb) == 1)
-            continue;
+        // No closed test here. A neighbour that is already closed is still allowed to be
+        // improved; see the re-open below and the header for why skipping it is unsound.
         if(!navGatePassable(ds_grid_get(global.navEdges, NAV_EDGE_GATE, i), team, hasIntel))
             continue;
 
@@ -138,18 +176,15 @@ while(!ds_priority_empty(openSet))
         }
 
         cost = ds_grid_get(global.navEdges, NAV_EDGE_COST, i);
-        if(jitterSeed != 0)
+
+        // Its own if for the same reason the blacklist test above has one: GM8 evaluates
+        // both sides of and/or unconditionally, so folding the -1 check in beside the
+        // lookup would call ds_map_exists on -1 for every caller without an occupancy map.
+        if(occupancy >= 0)
         {
-            // Knuth multiplicative hashing on the edge row, offset by the seed, read out
-            // of the middle bits rather than the low ones - the low bits of a single
-            // multiply barely move between consecutive i, which would give neighbouring
-            // edges near-identical jitter and defeat the whole point. Every intermediate
-            // here stays well inside a double's exact-integer range (the largest is about
-            // 5e13 against 9e15), so this is exact arithmetic rather than something that
-            // drifts between two calls with the same arguments.
-            hash = ((i + 1) * 2654435761 + jitterSeed * 40503) mod 4294967296;
-            hash = (hash div 65536) mod 256;
-            cost = cost * (1 + NAV_PATH_JITTER * hash / 255);
+            eKey = navEdgeKey(current, nb);
+            if(ds_map_exists(occupancy, eKey))
+                cost = cost * (1 + BOT_OCCUPANCY_COST * ds_map_find_value(occupancy, eKey));
         }
 
         tentative = ds_grid_get(gScore, 0, current) + cost;
@@ -159,6 +194,10 @@ while(!ds_priority_empty(openSet))
 
         ds_grid_set(gScore, 0, nb, tentative);
         ds_grid_set(cameFrom, 0, nb, current);
+        // Re-open it. The push below is ignored by the pop loop while the node is still
+        // marked closed, so without this the improvement would be recorded in gScore and
+        // never expanded from - the node would keep its old, worse successors.
+        ds_grid_set(closed, 0, nb, 0);
 
         nx = (ds_grid_get(global.navNodes, NAV_NODE_X0, nb) + ds_grid_get(global.navNodes, NAV_NODE_X1, nb)) / 2;
         ny = ds_grid_get(global.navNodes, NAV_NODE_Y, nb);

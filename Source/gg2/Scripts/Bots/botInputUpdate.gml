@@ -20,30 +20,21 @@
 /// and SPECIAL, navigation owns LEFT/RIGHT/JUMP/DOWN - so the bot shoots while it walks,
 /// exactly as a player does.
 ///
-/// On top of those sit four small movement behaviours that are neither route-following
-/// nor firing policy, and that all belong here because here is the only place that can
-/// see both halves at once:
+/// On top of those sit two small movement behaviours that are neither route-following nor
+/// firing policy, and that both belong here because here is the only place that can see
+/// both halves at once:
 ///
-///   dodge      (M7 4.3) jump when something dangerous is incoming. A rocket fired flat
-///              across open ground cannot be dodged any other way.
-///   fidget     (M7 4.2) a low-rate random hop while in a fight. Cheap, and
-///              disproportionately human-looking: nothing else in the model makes a
-///              bot's feet leave the ground for no tactical reason.
-///   air jump   (M7 4.1) a Scout's second, mid-air jump - the evasion half of the
-///              feature. The navigation half (a NAV_EDGE_DOUBLEJUMP generator) is a
-///              graph question and is not this.
+///   dodge      (M7 4.3) jump when a rocket is incoming. One fired flat across open ground
+///              cannot be dodged any other way.
 ///   back off   (M7 2.4/3.2) walk away from an enemy that is inside this class's minimum
 ///              band. Two bots that walk into each other otherwise stand nose to nose
 ///              with a degenerate aim solve and neither can shoot; and a Soldier pinned
 ///              at point-blank range cannot fire at all without killing itself.
 ///
-/// KEY_JUMP is edge-triggered in Character's Begin Step (pressedKeys & $80), which is
-/// what makes ORing the first three in safe: a press cannot double a jump the follower
-/// already wants, and the ground gate on the first two keeps them out of a planned arc
-/// without needing to know anything about that arc. The air jump is the one that *does*
-/// need to know, because it fires precisely when the bot is airborne - hence
-/// botFlyingEdge, which botPathKeys sets while it is flying a trajectory the graph
-/// validated, and which any nudge in the air would permanently ruin (M6 part 5).
+/// KEY_JUMP is edge-triggered in Character's Begin Step (pressedKeys & $80), which is what
+/// makes ORing the dodge in safe: a press cannot double a jump the follower already wants,
+/// and the ground gate keeps it out of a planned arc without needing to know anything
+/// about that arc.
 ///
 /// event_user(1) still fires every tick regardless, so pressedKeys/releasedKeys edge
 /// detection keeps working in between decisions (F3). Two things depend on it: the path
@@ -51,7 +42,7 @@
 /// cloaks on the rising edge of KEY_SPECIAL.
 
 var player, char, tick, navKeys, fireKeys, evadeKeys, alive;
-var subject, minBand, mates, holding, wantHop;
+var subject, minBand, mates, holding;
 
 player = argument0;
 char = player.object;
@@ -96,96 +87,54 @@ if(tick < player.botRegroupUntil)
                 mates += 1;
         }
     }
-    if(mates < BOT_REGROUP_MATES)
+    // Wait for company, but not for a crowd. BOT_REGROUP_MATES is 1 rather than 2 so the
+    // unit that forms is a pair: with 2 every bot on a freshly spawned team satisfied the
+    // test on the same frame and the whole team left as one body, which is the clumping
+    // reported from play - and a team moving as one body has one goal, so it also has one
+    // decision to make and nothing to break a tie with.
+    //
+    // BOT_REGROUP_CROWD is the other end of the same idea. A bot that spawns into a pile
+    // that is already big enough does not add itself to it; it stops holding at once and
+    // goes, which is what keeps the hold from compounding into the whole roster.
+    if(mates >= BOT_REGROUP_CROWD)
+        player.botRegroupUntil = 0;
+    else if(mates < BOT_REGROUP_MATES)
         holding = true;
     else
         player.botRegroupUntil = 0;
 }
 
-if(holding)
+// WARNING: only with both feet on the ground, and never part-way through an edge the graph
+// validated. Stripping LEFT/RIGHT while the follower is tracking a jump arc is not a pause,
+// it is a different jump: botPathKeys is holding a position-per-tick trajectory that needs a
+// key almost every tick to stay on, and a bot that stops pressing at the apex lands short of
+// where the arc was proved to reach. Reported from play as "bot seems to stop trying to move
+// left mid-jump - might be interacting with the stay-in-a-group behaviour", which is exactly
+// what it was: the hold was applied to whatever botPathKeys returned, with no idea whether
+// the bot was walking or airborne. Same reasoning as every other behaviour here (M6 part 5),
+// and this one simply predated the rule.
+if(holding and char.onground and !player.botFlyingEdge)
     navKeys = navKeys & ~(KEY_LEFT | KEY_RIGHT);
 
+// Dodge an incoming rocket (M7 4.3). One fired flat across open ground cannot be dodged
+// without jumping, and a bot that just stands there reads as having no self-preservation
+// at all. Grounded only, which keeps it out of every planned jump arc, and never throttled,
+// because it is a reflex to a thing that is actually in the air.
+//
+// botRocketDodge, not a proximity test: it flies both futures out and presses only when the
+// standing bot is hit and the jumping one is not. A radius test cannot distinguish a rocket
+// coming in at the knees (jump) from one passing over the head (jumping is what puts the bot
+// in front of it), and getting that backwards made a bot a guaranteed hit for anyone who
+// aimed high.
+//
+// This is the *only* thing that presses JUMP outside the path follower. The voluntary combat
+// hops that used to sit here - a blocked-shot peek, an ambient fidget while in a fight, and
+// the Scout's mid-air second jump - have been removed. Between them they fired often enough,
+// and precisely in the situation where botPathKeys has already arrived and is returning no
+// movement keys at all, that bots in a firefight read as stuck in place jumping.
 evadeKeys = 0;
-if(char.onground)
-{
-    player.botAirJumpUsed = false;
-
-    // A rocket fired flat across open ground cannot be dodged without jumping, and a bot
-    // that just stands there reads as having no self-preservation at all - checked first
-    // and widened to any direction, since you dodge things behind you too (M7 4.3). This
-    // one is a reflex to a thing that is actually in the air and is never throttled.
-    if(botIncomingProjectile(char, BOT_AIRBLAST_RANGE, true))
-        evadeKeys |= KEY_JUMP;
-    // ⚠️ Everything below is a *voluntary* hop and shares one cooldown, because without it
-    // they are not a mannerism, they are a seizure. The blocked-shot roll below fires at
-    // 15% a tick, which is a hop every ~7 ticks - four a second, for as long as the target
-    // stays out of sight - and combat mostly happens where a bot has already arrived and
-    // botPathKeys is returning no movement keys at all, so there is nothing else moving to
-    // dilute it. Reported from play as "two bots shooting at each other seem to just be
-    // jumping up and down in place", which is exactly what 4 Hz looks like.
-    //
-    // The roll rates are left alone: they decide how quickly the *first* hop comes out,
-    // which is the part that reads as reacting. BOT_HOP_PERIOD decides how often after
-    // that, which is the part that reads as twitching.
-    else if(tick - player.botHopAt >= BOT_HOP_PERIOD)
-    {
-        wantHop = false;
-
-        // Jump when the shot is blocked (M7 4.4, the cheap fragment of it). Holding a
-        // target the bot cannot currently see means something is between them - a lip, a
-        // crate, the edge of a roof - and hopping is what a player does about that. It
-        // reproduces the useful half of a jump-peek (get the shot over the obstacle) with
-        // no cover model at all, and it costs nothing extra to ask: botVisible is already
-        // maintained every perception tick by the target-memory window (M7 3.8), so there
-        // is no second collision_line here. What it does *not* do is the deliberate return
-        // to cover, which is the half that needs per-node sightlines and is still deferred.
-        //
-        // Rolled per tick rather than held. KEY_JUMP is edge-triggered, so a bit held down
-        // for as long as the obstruction lasts produces exactly one jump and then a bot
-        // standing there with the key pressed - the roll is what keeps releasing it.
-        if(player.botTarget != noone and !player.botVisible and random(1) < 0.15)
-            wantHop = true;
-        // A low-rate random hop while in a fight (M7 4.2), independent of whether anything
-        // is actually incoming right now - cheap, and disproportionately human-looking:
-        // nothing else in the model makes a bot's feet leave the ground for no tactical
-        // reason.
-        else if(player.botTarget != noone and random(1) < 0.01)
-            wantHop = true;
-
-        if(wantHop)
-        {
-            evadeKeys |= KEY_JUMP;
-            player.botHopAt = tick;
-        }
-    }
-}
-else if(botClassProfile(player.class, BOT_CP_AIRJUMP)
-        and !player.botFlyingEdge and !player.botAirJumpUsed)
-{
-    // The Scout's second jump, as evasion (M7 4.1): erratic by design, which is what makes
-    // it hard to lead. Three gates, and each one is load-bearing:
-    //
-    //   canDoublejump/doublejumpUsed  the engine's own state (Character's Begin Step), so
-    //                                 this never presses for a jump that cannot happen.
-    //   vspeed > 0                    only on the way down. Partly because that is where a
-    //                                 second jump buys the most height, and partly because
-    //                                 several ticks have necessarily passed since the
-    //                                 takeoff press - a press on the tick after that one
-    //                                 would not be a rising edge and would do nothing.
-    //   botFlyingEdge                 never while following a jump edge. The follower is
-    //                                 flying a position-per-tick arc the graph validated,
-    //                                 and any nudge in the air is permanent (M6 part 5).
-    //
-    // Once per airborne period, so an unlucky roll cannot spend it twice.
-    if(char.canDoublejump and !char.doublejumpUsed and char.vspeed > 0)
-    {
-        if(player.botTarget != noone and random(1) < BOT_DOUBLEJUMP_CHANCE)
-        {
-            evadeKeys |= KEY_JUMP;
-            player.botAirJumpUsed = true;
-        }
-    }
-}
+if(char.onground and botRocketDodge(char))
+    evadeKeys = KEY_JUMP;
 
 // Back away from anything inside this class's minimum band (M7 2.4/3.2). Only from a
 // target the bot can actually see - a remembered one behind a wall (M7 3.8) is not a

@@ -22,4 +22,9 @@ message += value_to_string(a);
 message += " should be equal to ";
 message += value_to_string(b);
 
+// Accumulated as well as shown; see test_unit_begin for why.
+if(!variable_global_exists("testFailLog"))
+    global.testFailLog = "";
+global.testFailLog += message + "|";
+
 show_message(message);

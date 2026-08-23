@@ -20,6 +20,25 @@ if((frame mod 30) == 0 and global.run_virtual_ticks)
 if(global.run_virtual_ticks)
     navServerTick();
 
+// The bots' shared edge-occupancy counts are keyed by node index, and a node index only
+// means anything to one build of the graph - so they go when the graph does. Not ready
+// covers both halves of a map change (the old graph freed, the new one still building),
+// and the call is a two-comparison no-op once the counts are already clear, which is
+// every tick of a cold build after the first.
+//
+// Nested rather than one and-ed condition: GM8 evaluates both sides of and/or
+// unconditionally, so a single test would read global.navReady on the ticks this server
+// is not running them - and navReady is created by navServerTick above, which those same
+// ticks skip. The variable_global_exists guard is the same trap one level down.
+if(global.run_virtual_ticks)
+{
+    if(variable_global_exists("navReady"))
+    {
+        if(!global.navReady)
+            botOccupancyReset();
+    }
+}
+
 // Service all players
 var i;
 for(i=0; i < ds_list_size(global.players); i+=1)

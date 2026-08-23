@@ -198,7 +198,13 @@ if(player.botPathAt >= size - 1)
     // as arrived once it is on the ground and actually stopped. Braking is a press
     // against the motion, which is also how a player stops; the speed floor is what
     // keeps that from becoming a press back the other way.
-    if(abs(char.x - gx) <= BOT_ARRIVE_TOL)
+    //
+    // botPathStale disables the whole band. The route being followed is then one to a goal
+    // that has already been replaced - kept only so the bot keeps moving until a plan for the
+    // new goal exists (botSetGoal) - and its last node is somewhere the bot was sent before.
+    // Reaching the end of it is not an arrival at anything, and declaring one would clear
+    // botHasGoal and throw away the objective the bot had just been given.
+    if(abs(char.x - gx) <= BOT_ARRIVE_TOL and !player.botPathStale)
     {
         if(char.onground and abs(char.hspeed) < 1)
         {

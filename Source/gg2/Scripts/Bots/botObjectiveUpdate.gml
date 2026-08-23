@@ -61,6 +61,7 @@ var player, char, wx, wy, found, anchorX, anchorY, useSpot, held, carryGoal;
 var spotMin, spotMax, spotHigh, spotLOS, spotMode, classWants, spotNode, snapNode, spreadX;
 var ownBase, enemyFlag, targetGen, enemyPoint, bestDist, cpTarget, zoneCp, defending;
 var ally, foe, spawn, pushLen, pushX, pushY, wantPush, chaseTeam, carrier, contested;
+var ownFlag;
 
 player = argument0;
 char = player.object;
@@ -201,11 +202,33 @@ if(instance_exists(IntelligenceBase) or instance_exists(Intelligence))
     }
     else
     {
+        // WARNING: our own flag being carried outranks fetching theirs, and it is tested
+        // first for that reason. Before this only a defender ever chased a thief - so on a
+        // team that happened to roll no defenders (botRoleAssign counts down the roster, and
+        // a short team can land none) an enemy could stand in the open holding the flag with
+        // nobody on the map interested in them. Reported from play as "bots do not pursue the
+        // enemy holding the flag - no effort to kill me while I stand at 2676,582". Every
+        // role answers it now: an attacker halfway to the enemy base is still the closest
+        // thing our flag has to a defender, and a capture ends the round whatever else that
+        // attacker was about to achieve.
+        if(player.team == TEAM_RED)
+            ownFlag = IntelligenceRed;
+        else
+            ownFlag = IntelligenceBlue;
+
         if(player.team == TEAM_RED)
             enemyFlag = IntelligenceBlue;
         else
             enemyFlag = IntelligenceRed;
-        if(instance_exists(enemyFlag))
+
+        if(!instance_exists(ownFlag))
+        {
+            if(player.team == TEAM_RED)
+                chaseTeam = TEAM_BLUE;
+            else
+                chaseTeam = TEAM_RED;
+        }
+        else if(instance_exists(enemyFlag))
         {
             wx = enemyFlag.x;
             wy = enemyFlag.y;
@@ -403,6 +426,9 @@ else if(instance_exists(ControlPoint))
 // throttles the re-issue for free, exactly as it does for the Medic.
 //
 // One carrier per team at most (there is one flag each), so team alone identifies it.
+//
+// Both directions of the chase reach here: running down the enemy who has *our* flag - which
+// every role does, decided in the cascade above - and escorting the team-mate who has theirs.
 if(chaseTeam >= 0)
 {
     carrier = noone;

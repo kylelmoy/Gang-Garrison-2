@@ -84,7 +84,7 @@ switch(player.class)
         // spending it on empty air.
         if(instance_exists(weapon))
         {
-            if(weapon.ammoCount >= 40 and botIncomingProjectile(char, BOT_AIRBLAST_RANGE, false))
+            if(weapon.ammoCount >= 40 and botIncomingProjectile(char, BOT_AIRBLAST_RANGE))
                 keys |= KEY_SPECIAL;
         }
         break;

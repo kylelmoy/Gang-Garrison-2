@@ -81,15 +81,26 @@ if(((place + 1) mod every) == 0)
 else
     player.botRole = BOT_ROLE_ATTACK;
 
-// The per-bot goal spread (M7 2.4) and the per-bot route seed (M7 1.4) are derived here
-// too, because both are "what makes this bot different from its team-mates" and both must
-// be constant for the bot's whole life - a spread that changes re-issues the goal, and a
-// route seed that changes re-plans the route, every time it is read.
+// The per-bot goal spread (M7 2.4) is derived here too, because it is "what makes this bot
+// different from its team-mates" and it must be constant for the bot's whole life - a spread
+// that changes re-issues the goal every time it is read.
 //
 // The id is a plain instance id, so consecutive bots differ by 1: `mod 2` alternates the
 // side and the second term walks the magnitude around an 11-cycle, which is enough spread
 // for any team size a GG2 server runs and is exactly reproducible from a bot's id.
+//
+// A per-bot route seed used to be derived here as well, on the same reasoning. It fed a cost
+// jitter in navFindPath that produced no route variety at all - measured on ctf_truefort,
+// all eight bots got the identical route, because per-edge noise averages out over a long
+// path and leaves the ordering between routes untouched - so it is gone and route variety
+// is a shared occupancy penalty instead (navFindPath, botOccupancyAdd). ROUTEVARIETY.md is
+// the handoff. Anything that wants a stable per-bot number again can derive it from
+// `player` exactly as the spread below does.
+//
+// WARNING: the spread assignment below was deleted along with the route seed, and the
+// comment describing it was left behind - so botSpreadX sat at its Create-event 0 for
+// every bot and the whole M7 2.4 spread quietly did nothing. test_botskill asserts
+// `abs(botSpreadX) <= BOT_SPREAD_MAX`, which 0 satisfies, so nothing caught it.
 player.botSpreadX = ((player mod 2) * 2 - 1) * BOT_SPREAD_MAX * (((player * 7) mod 11) / 10);
-player.botRouteSeed = player;
 
 return player.botRole;

@@ -42,10 +42,13 @@
 ///                        SPECIAL alone. Every other class's SPECIAL is a reflex - an
 ///                        airblast, a detonation - and deliberately is not gated, because a
 ///                        reaction that arrives 1.5 s late is not a reaction.
-///   BOT_CP_AIRJUMP       botInputUpdate. Whether this class has a second jump worth
-///                        spending on evasion (M7 4.1). The engine's own canDoublejump and
-///                        doublejumpUsed are still the hard gate at the call site - this
-///                        field only says the behaviour is wanted.
+///   BOT_CP_AIRJUMP       No consumer. It described the class that had a second jump worth
+///                        spending on evasion (M7 4.1); that behaviour was removed from
+///                        botInputUpdate along with the rest of the voluntary combat
+///                        jumping. The row is kept because it is still true about the
+///                        Scout, and because a NAV_EDGE_DOUBLEJUMP generator - the
+///                        navigation half of the feature, which was never built - is the
+///                        one caller that would want it back.
 ///   BOT_CP_FOLLOW        botObjectiveUpdate. Whether this class's goal is a moving ally
 ///                        rather than the game mode's objective (M7 6.2).
 ///   BOT_CP_DEFEND_EVERY  botRoleAssign. One bot in every N of this class's lean group

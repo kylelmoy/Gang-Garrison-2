@@ -3,11 +3,15 @@
   <resource name="botAdd" type="RESOURCE"/>
   <resource name="botRemove" type="RESOURCE"/>
   <resource name="botPickTeam" type="RESOURCE"/>
+  <resource name="botPickClass" type="RESOURCE"/>
   <resource name="botReteamAll" type="RESOURCE"/>
   <resource name="botPopulationUpdate" type="RESOURCE"/>
   <resource name="botFindTarget" type="RESOURCE"/>
   <resource name="botAimLead" type="RESOURCE"/>
   <resource name="botAimSolve" type="RESOURCE"/>
+  <resource name="botOccupancyMap" type="RESOURCE"/>
+  <resource name="botOccupancyAdd" type="RESOURCE"/>
+  <resource name="botOccupancyReset" type="RESOURCE"/>
   <resource name="botPathFree" type="RESOURCE"/>
   <resource name="botNavRelease" type="RESOURCE"/>
   <resource name="botSetGoal" type="RESOURCE"/>
@@ -25,6 +29,8 @@
   <resource name="botEnemyWithin" type="RESOURCE"/>
   <resource name="botMinesArmed" type="RESOURCE"/>
   <resource name="botIncomingProjectile" type="RESOURCE"/>
+  <resource name="botRocketDodge" type="RESOURCE"/>
+  <resource name="botIsCharacter" type="RESOURCE"/>
   <resource name="botServerActions" type="RESOURCE"/>
   <resource name="botAimSpread" type="RESOURCE"/>
   <resource name="botAngleDelta" type="RESOURCE"/>
