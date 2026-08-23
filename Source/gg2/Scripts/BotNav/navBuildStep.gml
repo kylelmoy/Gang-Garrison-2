@@ -78,6 +78,10 @@ if(global.navBuildState == NAV_BUILD_NODES)
     global.navNodes = navNodesExtract(global.navFree, global.navSolid, global.navPlatform, global.navLethal, global.navDoor, global.navGate, global.navMaskW, global.navMaskH);
     global.navCellGrid = navNodeGrid(global.navNodes, global.navNodeCount, global.navMaskW, global.navMaskH);
     global.navRowStart = navRowIndex(global.navNodes, global.navNodeCount, global.navMaskH);
+    // Which node set this index describes. navNodeFromWorld refuses to use it against any
+    // other one; see its header for why a stale row index is worse than no row index.
+    global.navRowFor = global.navNodes;
+    global.navRowForCount = global.navNodeCount;
 
     navEdgesBegin();
     global.navCursor = 0;
@@ -146,8 +150,11 @@ if(global.navBuildState == NAV_BUILD_FINISH)
     global.navEdgeIdx = navEdgeIndex(global.navEdges, global.navEdgeCount, global.navNodeCount);
 
     // The scaffolding is much larger than the graph and trivially rederivable.
-    ds_grid_destroy(global.navRowStart);
-    global.navRowStart = -1;
+    //
+    // navRowStart is the exception and is kept: it is one entry per mask row against the
+    // cell grids' one per cell, and navNodeFromWorld needs it on every lookup to avoid
+    // reading the whole node list. navGraphFree already frees it on the way out, and
+    // navCacheLoad derives the same index for a cache hit.
     ds_grid_destroy(global.navCellGrid);
     global.navCellGrid = -1;
     ds_grid_destroy(global.navHfree);

@@ -61,6 +61,8 @@ navMarkInstances(global.navSolid, global.navPlatform, global.navLethal, global.n
 
 global.navCellGrid = -1;
 global.navRowStart = -1;
+global.navRowFor = -1;
+global.navRowForCount = -1;
 global.navCursor = 0;
 global.navBuildState = NAV_BUILD_SCAN;
 global.navReady = false;

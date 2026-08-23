@@ -25,6 +25,8 @@ if(!variable_global_exists("navBuildState"))
     global.navDoor = -1;
     global.navGate = -1;
     global.navRowStart = -1;
+    global.navRowFor = -1;
+    global.navRowForCount = -1;
     global.navAccEdges = -1;
     global.navAccCount = 0;
     global.navSolid = -1;
@@ -92,6 +94,11 @@ if(variable_global_exists("navRowStart") and global.navRowStart >= 0)
     ds_grid_destroy(global.navRowStart);
     global.navRowStart = -1;
 }
+// Unconditionally, and not inside the branch above: the stamp must never outlive the
+// index it describes, and a graph freed twice takes the second pass down this path with
+// navRowStart already -1.
+global.navRowFor = -1;
+global.navRowForCount = -1;
 // An abandoned build leaves the edge accumulator open; it is not part of the graph
 // but it is just as much a leak.
 if(variable_global_exists("navAccEdges") and global.navAccEdges >= 0)

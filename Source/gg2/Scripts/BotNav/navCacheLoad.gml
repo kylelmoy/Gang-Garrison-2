@@ -82,4 +82,14 @@ global.navMaskH = maskH;
 // A cached graph needs the same adjacency index a freshly built one gets, or every
 // search on a cache hit would read an index belonging to the previous map.
 global.navEdgeIdx = navEdgeIndex(edges, edgeCount, nodeCount);
+
+// And the same row index, for the same reason: navNodeFromWorld reads it on every lookup
+// and falls back to scanning the whole node list without it, so a cache hit would quietly
+// be an order of magnitude slower to path on than a cold build of the same map. The cache
+// does not store it - it is derived from the nodes in a single pass, and the file format
+// is unchanged by this, so NAV_CACHE_VERSION stays where it is and every cache already on
+// disk stays valid.
+global.navRowStart = navRowIndex(nodes, nodeCount, maskH);
+global.navRowFor = nodes;
+global.navRowForCount = nodeCount;
 return true;
