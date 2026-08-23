@@ -36,8 +36,8 @@
 /// under the same gravity as anything else (NAV_JUMP_GRAVITY 0.6 px/tick^2, terminal
 /// NAV_JUMP_TERM_VY 10), so a linear-only prediction has a target that jumped a moment
 /// ago rising at its launch speed forever - a bot used to fire high in the air at anyone
-/// airborne. tyPred integrates that fall continuously (the same closed form navJumpHeight
-/// uses, generalised from a standing jump to an arbitrary starting tvy - matches a
+/// airborne. tyPred integrates that fall continuously (the same closed form the graph
+/// generator's navJumpHeight uses - it lives in gg2-nav-gen/src/jump.js now - generalised from a standing jump to an arbitrary starting tvy - matches a
 /// tick-by-tick simulation of Character's own midpoint gravity to a few hundredths of a
 /// px), clamped at terminal velocity, then clamped a second time at tfloor so a long
 /// flight cannot predict a falling target through the ground it would already have
@@ -90,7 +90,7 @@ for(i = 0; i < BOT_AIM_ITERATIONS; i += 1)
     ax = tx + (tvx - drift) * t;
 
     // The target's own fall, from botFallPredict: the terminal-velocity-clamped closed
-    // form navJumpHeight uses, generalised to an arbitrary starting tvy and then clamped
+    // form the generator's navJumpHeight uses, generalised to an arbitrary starting tvy and then clamped
     // at the floor. Written out here twice - once in this loop and once to re-derive the
     // settled answer below - until botStabWindow needed the same prediction.
     ay = botFallPredict(ty, tvy, t, tfloor) - grav * t * (t + 1) / 2;

@@ -2,7 +2,8 @@
 /// Finds the nav node this bot should stand on in order to *do something to* (tx, ty),
 /// and returns its index - or -1 if no node in the graph qualifies. The chosen node's
 /// own stand position is published in global.botSpotX/global.botSpotY, next-call
-/// convention, the same way navJumpTakeoff publishes the rest of the arc it proved.
+/// convention, the same way the generator's navJumpTakeoff publishes the rest of the arc
+/// it proved.
 ///
 /// This is milestone 7 tier 3's one piece of new structure, and it exists because four
 /// separate items on the M7 list all want the same thing and none of them wants a point:

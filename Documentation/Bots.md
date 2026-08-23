@@ -38,13 +38,14 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
    `GameServerBeginStep.gml`'s roster loop, in the `else` branch beside
    `processClientCommands(player, i)` — the same point a human's `INPUTSTATE` is consumed, so
    ordering matches a human's by construction.
-4. **Navigation** — built once per map load, server-only, from the walkmask
-   (`global.CustomMapCollisionSprite`), chunked across frames so it never blocks socket servicing
-   and cached to disk keyed by map MD5. Nodes are run-length-encoded standable surfaces; edges are
+4. **Navigation** — server-only, **loaded** from a graph file generated ahead of time (see
+   *Generating nav graphs* below). Nodes are run-length-encoded standable surfaces; edges are
    analytic rather than a full trajectory fan, each generator using GG2's own movement numbers —
    walks and one-cell steps, straight-down falls, drop-throughs, jump arcs against the real
    `v0`/gravity envelope, and movebox pushes. The fan of F35 remains the endpoint; what is built is
-   its cheap first pass, and every edge it emits has to be one a bot can actually execute.
+   its cheap first pass, and every edge it emits has to be one a bot can actually execute. What
+   ships in `Scripts/BotNav/` is the *reading* half: the cache loader, the two indices it derives,
+   world-to-node resolution, and A\* over the result.
 5. **Combat/behaviour** — target selection modelled on `SentryTurret`'s End Step (a `ds_priority`
    over nearby `Character`s, LOS via `collision_line_bulletblocking`), plus per-class firing policy
    and a difficulty model (aim error, reaction latency, decision cadence).
@@ -52,6 +53,39 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
    whether bots are enabled, how many players to fill to, a cap, a minimum number of humans, a name
    prefix, whether removal waits for death, and `Difficulty` (1-5), which becomes the skill scalar
    every behaviour knob is derived from.
+
+## Generating nav graphs
+
+The graph is not built by the game. `Scripts/BotNav/navCacheLoad.gml` reads it from
+`botnav/<map>_a<area>[_<md5>].txt` beside the executable, and that is the only way one enters the
+game. Files come from [`gg2-nav-gen`](../../gg2-nav-gen), a standalone Node port of the generator
+that reads the map PNGs directly:
+
+```console
+$ node bin/gg2navgen.js build --all       # every shipped map, every stage, ~0.4s
+$ node bin/gg2navgen.js build koth_valley # one map
+$ node bin/gg2navgen.js build ./mymap.png # a custom map, by path
+```
+
+It writes into `Source/build/botnav` by default, which is where a dev build reads from, so
+`build --all` warms the whole rotation in place. For a release, ship the same files in a `botnav`
+directory next to `Gang Garrison 2.exe`.
+
+**A map with no file is a map with no bot navigation.** `navGraphLoad` leaves the state
+`NAV_BUILD_IDLE` and `global.navReady` false, bots do not path, and the server keeps serving the
+map to humans normally. It retries every five seconds, so dropping a freshly generated file into
+`botnav/` is picked up by a running server without a restart.
+
+Two things stay in sync by hand:
+
+- **`Constants.xml` is the shared contract.** `gg2-nav-gen` parses `NAV_*` and `TEAM_*` out of this
+  checkout at run time rather than copying them, so a geometry or field-layout change lands there
+  on the next run. Several `NAV_*` constants — the jump envelope, the per-side keep limits, the
+  node and edge field indices — therefore have no GML reader any more and must not be deleted:
+  they define the file format and the generator's behaviour.
+- **`NAV_CACHE_VERSION` guards the layout.** Bump it whenever a node or edge field moves, or a
+  server with a warm cache silently loads a graph whose columns mean something else. `navCacheLoad`
+  refuses a file that does not carry the current version.
 
 ## Gotchas worth remembering
 
@@ -65,9 +99,14 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
   existing script bodies are fast; new resources are not. `AgentSpare0..3` (four blank objects
   already compiled into the dev template) let a *new object's* behaviour be prototyped at ~3s
   before promoting it to a real named object.
-- **A whole-map nav build is seconds of blocking work** — fine in the map editor, not fine as a
-  blocking loop on a live server. Chunk it across frames from an alarm, and cache the built graph
-  to disk keyed by map MD5 so the expensive path runs once per map ever.
+- **A whole-map nav build is seconds of blocking work**, which is why the game no longer does one.
+  It used to: a chunked builder spread ~1.3s of work across frames so it never stalled socket
+  servicing, and cached the result so the expensive path ran once per map ever. That was the right
+  shape for a live server and the wrong shape for *developing* the generator, where every one-line
+  change to a cost function cost a full Game Maker build, a launch, and a rotation through every
+  map to re-warm the cache. The generator moved out to `gg2-nav-gen`, which does all 22 shipped
+  maps in under half a second from the map PNGs alone. The lesson generalises: work that depends
+  only on static map data does not belong on a server tick.
 - **Where a jump takes off from is a search, and what rules a takeoff out is what is above it.**
   Every jump in GG2 rises until something stops it, so a low ceiling over the end of a run shortens
   every arc that starts there, and one low enough leaves no arc that reaches the target at all —
@@ -172,16 +211,18 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
   `collision_line_bulletblocking`), aim and hold fire at it, and re-decide only every 15 ticks
   (staggered per bot) rather than tracking continuously. Confirmed via genuine bot-vs-bot combat
   (real kills, real respawns) and a direct `event_user(1)`/`pressedKeys` edge-detection check.
-- **M4** — nav graph builder: implemented (`Scripts/BotNav/`) and verified. The walkmask is scanned
-  into a solidity grid, dilated by the character box into a clearance grid, and run-length encoded
-  into surface nodes; edges come from five generators (walk, fall, drop-through, jump, movebox)
-  plus one-way doors, and A\* (`navFindPath`) searches them against a prebuilt adjacency index. The
-  build is chunked across frames so it never blocks socket servicing, and cached to disk keyed by
-  map name, area and MD5. Map objects the walkmask does not contain — `PlayerWall`,
-  `DropdownPlatform`, `KillBox`/`PitFall`/`FragBox`, `LeftDoor`/`RightDoor`, the gates, the
-  moveboxes — are stamped in separately by `navMarkInstances`. `cp_dirtbowl` (560k cells) builds in
-  ~11.7s cold with a client connected, both ends holding 30 fps, and loads from cache instantly
-  after.
+- **M4** — nav graph builder: implemented and verified, then **moved out of the game**. The
+  walkmask is scanned into a solidity grid, dilated by the character box into a clearance grid, and
+  run-length encoded into surface nodes; edges come from five generators (walk, fall, drop-through,
+  jump, movebox) plus one-way doors, and A\* (`navFindPath`) searches them against a prebuilt
+  adjacency index. Map objects the walkmask does not contain — `PlayerWall`, `DropdownPlatform`,
+  `KillBox`/`PitFall`/`FragBox`, `LeftDoor`/`RightDoor`, the gates, the moveboxes — are stamped in
+  separately rather than read from the mask. All of that now lives in `gg2-nav-gen`; what remains
+  in `Scripts/BotNav/` is the loader, the indices, and the search. The in-game builder chunked
+  itself across frames so it never blocked socket servicing (`cp_dirtbowl`, 560k cells, ~11.7s cold
+  with a client connected and both ends holding 30 fps); the offline one does every shipped map in
+  under half a second, which is why the chunking, the eleven build states and the scaffolding grids
+  are all gone.
 - **M5** — path following: implemented (`Scripts/Bots/botSetGoal.gml`, `botPathPlan.gml`,
   `botPathKeys.gml`) and verified. `botSetGoal(player, wx, wy)` is the entire interface — deciding
   *where* is M6's job. Gate passability is decided per query from the asking bot's team and intel

@@ -57,9 +57,9 @@
 /// visits exactly the nodes the old scan would have accepted, in the same index order, so
 /// the strict `<` below still resolves a tie to the same node it always did.
 ///
-/// navRowStart is build scaffolding that navBuildStep used to destroy at NAV_BUILD_FINISH;
-/// it is kept now, and navCacheLoad derives it for a cache hit. It is one entry per mask
-/// row, so keeping it costs a rounding error against the graph it indexes.
+/// navRowStart is derived by navCacheLoad, not stored in the cache file: it is one entry
+/// per mask row, so rebuilding it on load costs a rounding error against the parse that
+/// just happened and keeping it costs the same against the graph it indexes.
 ///
 /// ⚠️ It is used only when navRowFor says it was built from the node grid that is installed
 /// right now, and the linear scan below is what runs otherwise. That guard is not

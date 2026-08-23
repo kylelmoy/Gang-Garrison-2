@@ -19,7 +19,8 @@
 /// keeping it a ds_map rather than a cost multiplier keeps the heuristic admissible.
 ///
 /// The test is on the edge rather than on the node it arrives at, because an arc can
-/// cross a gate without landing on it (see navEdgeAdd). It also falls out of that that
+/// cross a gate without landing on it - the generator stamps an edge that passes through
+/// a gate with that gate, so the check below covers both. It also falls out of that that
 /// a bot standing inside a gate it may not pass - one that just picked up the intel,
 /// or anyone the setup gates shut around - still gets edges *out*: those arrive
 /// somewhere ungated and so are never refused.

@@ -11,7 +11,8 @@
 /// Why it is not `ty + tvy*t`. A Character falls under NAV_JUMP_GRAVITY (0.6 px/tick^2)
 /// to a terminal NAV_JUMP_TERM_VY (10), so a linear-only prediction has a target that
 /// jumped a moment ago rising at its launch speed forever - which is a bot firing high
-/// into the air at anyone airborne. This is the same closed form navJumpHeight uses,
+/// into the air at anyone airborne. This is the same closed form the graph generator's
+/// navJumpHeight uses (gg2-nav-gen/src/jump.js),
 /// generalised from a standing jump to an arbitrary starting tvy, and it matches a
 /// tick-by-tick simulation of Character's own midpoint gravity to a few hundredths of a
 /// pixel.

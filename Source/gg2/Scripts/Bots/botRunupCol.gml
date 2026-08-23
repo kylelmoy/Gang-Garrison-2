@@ -12,7 +12,7 @@
 /// standstill. On koth_gallery that is n56 -> n44: 96px of gap, 75px of arc, into the
 /// riser and back down the pit, forever.
 ///
-/// Following walk edges is safe *because of what a walk edge is*. navWalkEdges emits one
+/// Following walk edges is safe *because of what a walk edge is*. The generator emits one
 /// only between runs that touch on the same row, or that are one mask cell apart
 /// vertically with overlapping spans - and characterHitObstacle takes a one-cell step for
 /// free, keeping hspeed entirely (only a genuine wall zeroes it). So a chain of walk

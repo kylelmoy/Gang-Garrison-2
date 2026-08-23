@@ -332,7 +332,7 @@ jumpWantX = 0;
 
 if(edgeType == NAV_EDGE_DROPTHROUGH)
 {
-    // navDropEdges takes the drop from the middle of the run, and holding DOWN
+    // The generator's navDropEdges takes the drop from the middle of the run, and DOWN
     // disables the platform entirely - both the standing test and the push-out (F24).
     targetCol = floor((c0 + c1) / 2);
     if(abs(mx - targetCol) <= BOT_ENTRY_LEAD)
@@ -340,7 +340,7 @@ if(edgeType == NAV_EDGE_DROPTHROUGH)
 }
 else if(edgeType == NAV_EDGE_FALL)
 {
-    // navFallEdges drops straight down from the cell just past one end of the run, and
+    // The generator drops straight down from the cell just past one end of the run, and
     // carries that column on the edge, exactly as a jump carries its takeoff. Which end
     // it was cannot be re-derived here: "the column just past the run is inside the
     // landing node" is true of BOTH ends wherever the landing surface reaches under the
@@ -367,7 +367,7 @@ else if(edgeType == NAV_EDGE_FALL)
         targetCol = c0 - BOT_ENTRY_LEAD;
 
     // Off the edge, the modelled trajectory is a STRAIGHT VERTICAL DROP from the takeoff
-    // column - navFallEdges swept straight down from it and credited whatever surface it
+    // column - the generator swept straight down from it and credited whatever surface it
     // met - so the bot's job in the air is to hold that column, exactly the way a jump
     // holds its arc. Without this a fall is the one edge kind flown with no plan at all:
     // the bot walks off at whatever speed it had, keeps it (GG2 bleeds hspeed slowly),
@@ -390,7 +390,7 @@ else if(edgeType == NAV_EDGE_FALL)
 }
 else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
 {
-    // The takeoff column is carried on the edge, because navJumpTakeoff searched for
+    // The takeoff column is carried on the edge, because the generator searched for
     // it rather than assuming it. It is usually the end of the run facing the landing,
     // but where the landing surface is also what ends the run - climbing onto a crate -
     // the body is flush against it there and the only flyable arcs start a few cells
@@ -420,7 +420,7 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
     // being behind is a reason to press and being ahead is a reason to brake. Measured
     // over every class, rise, ledge width and run-up: 12-19% of jumps landed on the node
     // they were aimed at before, 100% after. (Both halves of that number matter - the
-    // other half is navJumpFlight no longer handing out arcs that were never going to
+    // other half is the generator no longer handing out arcs that were never going to
     // land there anyway.)
     //
     // Ticks are counted rather than read off char.vspeed, which would otherwise give

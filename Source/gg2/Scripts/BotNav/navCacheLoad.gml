@@ -1,13 +1,23 @@
 /// navCacheLoad(key)
-/// Loads a nav graph previously written by navCacheSave. Returns true if a usable
-/// cache was found, in which case global.navNodes, global.navEdges,
+/// Loads a nav graph from botnav/<key>.txt beside the executable. Returns true if a
+/// usable cache was found, in which case global.navNodes, global.navEdges,
 /// global.navNodeCount, global.navEdgeCount, global.navMaskW and global.navMaskH are
 /// all populated and the caller owns the two grids.
 ///
+/// This is the only way a nav graph enters the game. The generator that used to write
+/// these files from inside a running server now lives in the gg2-nav-gen tool, which
+/// builds every shipped map in under a second without a game; the files it writes are
+/// this format and this version. See Documentation/Bots.md for the workflow.
+///
 /// Returns false - having allocated nothing - if the file is absent, was written by a
 /// different NAV_CACHE_VERSION, or does not deserialise to the shape the header
-/// promised. A miss is completely ordinary (first ever visit to a map), so this stays
-/// quiet rather than erroring.
+/// promised. Callers treat a miss as "no bots path on this map", not as an error, so
+/// this stays quiet rather than erroring: a server with an ungenerated map in its
+/// rotation should keep serving that map to humans.
+///
+/// The format is one header line, one dimensions line, then the node and edge grids as
+/// ds_grid_write strings. That is a GM8 serialisation - column-major, sixteen-byte
+/// cells - so nothing outside this file should try to parse it by hand.
 ///
 /// Success is judged by the dimensions ds_grid_read leaves behind rather than by its
 /// return value: in GM8 it is a procedure, and treating it as a predicate would read
@@ -79,16 +89,17 @@ global.navEdgeCount = edgeCount;
 global.navMaskW = maskW;
 global.navMaskH = maskH;
 
-// A cached graph needs the same adjacency index a freshly built one gets, or every
-// search on a cache hit would read an index belonging to the previous map.
+// Neither index is stored in the file. Both are derived from the nodes and edges in a
+// single pass, and re-deriving them costs less than the parse that just happened, so the
+// format carries the graph and nothing that can be recomputed from it.
+//
+// The adjacency index has to be rebuilt here or every search would read an index still
+// describing the previous map.
 global.navEdgeIdx = navEdgeIndex(edges, edgeCount, nodeCount);
 
-// And the same row index, for the same reason: navNodeFromWorld reads it on every lookup
-// and falls back to scanning the whole node list without it, so a cache hit would quietly
-// be an order of magnitude slower to path on than a cold build of the same map. The cache
-// does not store it - it is derived from the nodes in a single pass, and the file format
-// is unchanged by this, so NAV_CACHE_VERSION stays where it is and every cache already on
-// disk stays valid.
+// The row index likewise: navNodeFromWorld reads it on every lookup and falls back to
+// scanning the whole node list without it, which is an order of magnitude more work per
+// call on a map with a few hundred nodes.
 global.navRowStart = navRowIndex(nodes, nodeCount, maskH);
 global.navRowFor = nodes;
 global.navRowForCount = nodeCount;

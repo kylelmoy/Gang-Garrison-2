@@ -18,7 +18,7 @@
 ///   bot       horizontally, whatever it is doing now (hspeed carried forward, which is
 ///             what the follower is holding). Vertically, either standing still or flying
 ///             the standing jump: rise(t) = NAV_JUMP_V0*t - NAV_JUMP_GRAVITY*t^2/2, the
-///             same closed form navJumpHeight uses.
+///             same closed form the graph generator's navJumpHeight uses.
 ///
 /// Both futures are walked tick by tick rather than solved, because the answer wanted is
 /// not "when is the closest approach" but "does either box ever contain it", and the two

@@ -8,7 +8,7 @@
 /// making.
 ///
 /// Where two edges connect the same pair (a walk and a jump between neighbouring
-/// ledges, say), the first is returned. navEdgesBuild emits walks before jumps, so
+/// ledges, say), the first is returned. The generator emits walks before jumps, so
 /// that is the cheaper one, which is also the one A* would have chosen.
 
 var fromNode, toNode, eStart, eCount, i;

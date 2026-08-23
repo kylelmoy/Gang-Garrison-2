@@ -1,7 +1,8 @@
 /// navEdgeIndex(edges, edgeCount, nodeCount)
 /// Returns a ds_grid of 2 columns by nodeCount rows holding, for each node, the index
 /// of its first outgoing edge and how many it has. Edges must already be sorted by
-/// NAV_EDGE_FROM, which navEdgesBuild guarantees.
+/// NAV_EDGE_FROM, which the cache file guarantees: gg2-nav-gen counting-sorts the edge
+/// list by from-node as its last step, so a loaded graph arrives already grouped.
 ///
 /// Without this, every A* expansion is a scan of the whole edge list; with it, a
 /// node's neighbours are a contiguous range. On cp_dirtbowl that is the difference

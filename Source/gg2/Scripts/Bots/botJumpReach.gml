@@ -3,7 +3,8 @@
 /// the takeoff column carrying v0 px/tick along the jump and then flew the arc the way
 /// botPathKeys' in-flight tracker flies it.
 ///
-/// This is the arithmetic the takeoff gate was missing. navJumpTakeoff proves an arc as
+/// This is the arithmetic the takeoff gate was missing. The graph generator's
+/// navJumpTakeoff (gg2-nav-gen/src/jump.js) proves an arc as
 /// a CONSTANT horizontal velocity applied from tick 0 and records it as NAV_EDGE_BUCKET;
 /// a GG2 character accelerates - hspeed = (hspeed + runPower*controlFactor)/baseFriction
 /// - and starts at whatever it is already carrying, which after a climb up a staircase

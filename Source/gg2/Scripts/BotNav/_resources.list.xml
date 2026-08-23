@@ -2,43 +2,17 @@
 <resources>
   <resource name="navCacheKey" type="RESOURCE"/>
   <resource name="navToken" type="RESOURCE"/>
-  <resource name="navSolidityScan" type="RESOURCE"/>
-  <resource name="navSolidityBuild" type="RESOURCE"/>
-  <resource name="navGateStamp" type="RESOURCE"/>
-  <resource name="navMarkInstances" type="RESOURCE"/>
-  <resource name="navClearanceRows" type="RESOURCE"/>
-  <resource name="navClearanceCols" type="RESOURCE"/>
-  <resource name="navClearanceBuild" type="RESOURCE"/>
-  <resource name="navAnchorCol" type="RESOURCE"/>
-  <resource name="navColWorldX" type="RESOURCE"/>
-  <resource name="navEdgeKey" type="RESOURCE"/>
-  <resource name="navNodesExtract" type="RESOURCE"/>
-  <resource name="navRowIndex" type="RESOURCE"/>
-  <resource name="navNodeGrid" type="RESOURCE"/>
-  <resource name="navEdgesBegin" type="RESOURCE"/>
-  <resource name="navEdgeAdd" type="RESOURCE"/>
-  <resource name="navWalkEdges" type="RESOURCE"/>
-  <resource name="navFallEdges" type="RESOURCE"/>
-  <resource name="navDropEdges" type="RESOURCE"/>
-  <resource name="navJumpCeiling" type="RESOURCE"/>
-  <resource name="navJumpHeight" type="RESOURCE"/>
-  <resource name="navJumpFlight" type="RESOURCE"/>
-  <resource name="navJumpLanding" type="RESOURCE"/>
-  <resource name="navJumpTakeoff" type="RESOURCE"/>
-  <resource name="navJumpEdges" type="RESOURCE"/>
-  <resource name="navMoveBoxEdges" type="RESOURCE"/>
-  <resource name="navEdgesBuild" type="RESOURCE"/>
-  <resource name="navEdgesSortByFrom" type="RESOURCE"/>
-  <resource name="navEdgeIndex" type="RESOURCE"/>
-  <resource name="navCountEdgeType" type="RESOURCE"/>
-  <resource name="navGatePassable" type="RESOURCE"/>
-  <resource name="navEdgeFind" type="RESOURCE"/>
-  <resource name="navFindPath" type="RESOURCE"/>
-  <resource name="navNodeFromWorld" type="RESOURCE"/>
-  <resource name="navCacheSave" type="RESOURCE"/>
   <resource name="navCacheLoad" type="RESOURCE"/>
   <resource name="navGraphFree" type="RESOURCE"/>
-  <resource name="navBuildStart" type="RESOURCE"/>
-  <resource name="navBuildStep" type="RESOURCE"/>
+  <resource name="navGraphLoad" type="RESOURCE"/>
   <resource name="navServerTick" type="RESOURCE"/>
+  <resource name="navAnchorCol" type="RESOURCE"/>
+  <resource name="navColWorldX" type="RESOURCE"/>
+  <resource name="navRowIndex" type="RESOURCE"/>
+  <resource name="navNodeFromWorld" type="RESOURCE"/>
+  <resource name="navEdgeKey" type="RESOURCE"/>
+  <resource name="navEdgeIndex" type="RESOURCE"/>
+  <resource name="navEdgeFind" type="RESOURCE"/>
+  <resource name="navGatePassable" type="RESOURCE"/>
+  <resource name="navFindPath" type="RESOURCE"/>
 </resources>

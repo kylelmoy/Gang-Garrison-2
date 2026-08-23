@@ -181,20 +181,8 @@
   <constant name="NAV_EDGE_ROCKETJUMP" value="6"/>
   <constant name="NAV_EDGE_STICKYJUMP" value="7"/>
   <constant name="NAV_CACHE_VERSION" value="13"/>
-  <constant name="NAV_BUILD_SCAN_CELLS" value="32000"/>
-  <constant name="NAV_BUILD_CLEAR_CELLS" value="8000"/>
   <constant name="NAV_BUILD_IDLE" value="0"/>
-  <constant name="NAV_BUILD_SCAN" value="1"/>
-  <constant name="NAV_BUILD_HFREE" value="2"/>
-  <constant name="NAV_BUILD_FREE" value="3"/>
-  <constant name="NAV_BUILD_NODES" value="4"/>
-  <constant name="NAV_BUILD_WALK" value="5"/>
-  <constant name="NAV_BUILD_FALL" value="6"/>
-  <constant name="NAV_BUILD_JUMP" value="7"/>
-  <constant name="NAV_BUILD_FINISH" value="8"/>
   <constant name="NAV_BUILD_DONE" value="9"/>
-  <constant name="NAV_BUILD_MOVEBOX" value="10"/>
-  <constant name="NAV_BUILD_EDGE_NODES" value="8"/>
   <constant name="NAV_MAX_FALL" value="150"/>
   <constant name="NAV_JUMP_V0" value="8.3"/>
   <constant name="NAV_JUMP_GRAVITY" value="0.6"/>
