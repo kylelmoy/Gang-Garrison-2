@@ -156,6 +156,10 @@
     botAimInterval = 1;
     botTurnRate = 360;
     botAimErrorDeg = 0;
+    // Suppression aim (M9 3.1): the node this bot is denying while it holds a target
+    // it cannot see, and when that answer is next worth recomputing. -1 is "none".
+    botSuppressNode = -1;
+    botSuppressAt = 0;
     botAimConeDeg = 0;
     botMoveErrMult = 1;
     botHoldFireChance = 0;

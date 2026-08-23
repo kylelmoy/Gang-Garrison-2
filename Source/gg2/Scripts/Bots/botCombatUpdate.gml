@@ -291,6 +291,42 @@ if(tick >= player.botAimAt)
     aimX = player.botSeeX;
     aimY = player.botSeeY;
 
+    // Suppression. Holding a target that cannot be seen, the snapshot above is deliberately
+    // frozen at the last position actually seen (M7 3.8) - which is, by construction, behind
+    // the cover they went into. For a class whose weapon can deny a doorway, the better
+    // answer is the first point on the route they would have to walk back along that this
+    // bot can actually see. botSuppressSpot works that out; this decides when to ask.
+    //
+    // ⚠️ On botSuppressAt, not on botAimAt. This is an A* call and botAimInterval is 2 ticks
+    // at the top tier, so asking it here would be a search per bot per two frames on a
+    // server that is already near its 33.3ms frame with twelve bots (M9 §9.5). The answer is
+    // re-used between refreshes, which is also honest about what it is: a place, not a
+    // moving target.
+    if(!subjectIsAlly and !player.botVisible and player.botTargetIsChar
+       and botClassProfile(player.class, BOT_CP_SUPPRESS))
+    {
+        if(tick >= player.botSuppressAt)
+        {
+            player.botSuppressAt = tick + BOT_TARGET_PERIOD;
+            player.botSuppressNode = botSuppressSpot(char, player.botSeeX, player.botSeeY,
+                                                     1 - char.team);
+        }
+        if(player.botSuppressNode >= 0)
+        {
+            aimX = navColWorldX(floor((ds_grid_get(global.navNodes, NAV_NODE_X0, player.botSuppressNode)
+                                       + ds_grid_get(global.navNodes, NAV_NODE_X1, player.botSuppressNode)) / 2));
+            aimY = (ds_grid_get(global.navNodes, NAV_NODE_Y, player.botSuppressNode) + NAV_BOX_H)
+                   * NAV_CELL_SIZE - 23;
+            // The velocity that came with the snapshot belongs to a body that was moving
+            // when it was last seen; a doorway is not moving. Leading a fixed point by a
+            // dead man's velocity is how a suppression shot ends up in the far wall.
+            player.botSeeVX = 0;
+            player.botSeeVY = 0;
+        }
+    }
+    else
+        player.botSuppressNode = -1;
+
     // Splash weapons want the ground under a grounded target, not its chest: a rocket
     // that lands at the feet damages regardless of where the target steps next.
     //

@@ -59,6 +59,10 @@
 ///                        FLANK. See below.
 ///   BOT_CP_SPOT_HIGH     botObjectiveUpdate. How much this class values height when
 ///                        choosing that position, in botGoalSpot's highBonus units.
+///   BOT_CP_SUPPRESS      botCombatUpdate. Whether this class, holding a target it cannot
+///                        see, aims at the point the enemy must cross to come back into
+///                        view (botSuppressSpot) rather than at the stale last-seen
+///                        position. Costs an A* call, so it is opt-in per class.
 ///   BOT_CP_AIM_ERR       botCombatUpdate. Multiplier on this class's angular aim error,
 ///                        applied to botAimErrorDeg and botAimConeDeg together. 1 is the
 ///                        tier's own number and is the default.
@@ -190,6 +194,17 @@ switch(field)
         if(class == CLASS_DEMOMAN)
             return BOT_SPOT_STANDOFF;
         return BOT_SPOT_NONE;
+
+    case BOT_CP_SUPPRESS:
+        // Only the Heavy, and only because the case was measured before it was built
+        // (botSuppressSpot's header carries the numbers). A Minigun is the one weapon in
+        // the game whose whole job can be denying a doorway nobody is standing in yet;
+        // for everything else this would be an A* call per blind target to make a shot
+        // that was going to be wasted either way. M9 §9.5 is the reason that matters -
+        // twelve bots is not far from the 33.3ms frame.
+        if(class == CLASS_HEAVY)
+            return 1;
+        return 0;
 
     case BOT_CP_AIM_ERR:
         if(class == CLASS_SOLDIER)

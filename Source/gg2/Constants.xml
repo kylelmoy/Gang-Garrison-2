@@ -303,6 +303,8 @@
   <constant name="BOT_CP_AIM_ERR_TIGHT" value="0.6"/>
   <constant name="BOT_CP_AIM_ERR_LOOSE" value="1.6"/>
   <constant name="BOT_CP_SETTLE_LOOSE" value="2"/>
+  <constant name="BOT_CP_SUPPRESS" value="11"/>
+  <constant name="BOT_SUPPRESS_HOPS" value="24"/>
   <constant name="BOT_SPOT_NONE" value="0"/>
   <constant name="BOT_SPOT_STANDOFF" value="1"/>
   <constant name="BOT_SPOT_CHOKE" value="2"/>

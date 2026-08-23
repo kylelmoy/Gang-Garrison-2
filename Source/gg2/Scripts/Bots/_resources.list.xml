@@ -12,6 +12,7 @@
   <resource name="botFallPredict" type="RESOURCE"/>
   <resource name="botArcClear" type="RESOURCE"/>
   <resource name="botStabWindow" type="RESOURCE"/>
+  <resource name="botSuppressSpot" type="RESOURCE"/>
   <resource name="botAimSolve" type="RESOURCE"/>
   <resource name="botOccupancyMap" type="RESOURCE"/>
   <resource name="botOccupancyAdd" type="RESOURCE"/>
