@@ -39,6 +39,7 @@
   <resource name="botInBlastBeam" type="RESOURCE"/>
   <resource name="botIncomingProjectile" type="RESOURCE"/>
   <resource name="botRocketDodge" type="RESOURCE"/>
+  <resource name="botRocketReach" type="RESOURCE"/>
   <resource name="botIsCharacter" type="RESOURCE"/>
   <resource name="botServerActions" type="RESOURCE"/>
   <resource name="botAimSpread" type="RESOURCE"/>

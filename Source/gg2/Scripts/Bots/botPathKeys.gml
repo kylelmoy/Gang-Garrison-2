@@ -31,7 +31,7 @@
 var player, char, keys, here, size, cur, nxt, i, edgeRow, edgeType, found, moved, rejumpAt;
 var mx, targetCol, tx, gx, n0, n1, c0, c1, takeoffCol, wantJump, dirToNext;
 var needVx, braking, tracking, flightTicks, jumpDist, jumpDir, jumpWantX, vAlong;
-var jumpNeed, landCol, takeoffLead;
+var jumpNeed, landCol, takeoffLead, isRocket, reachPx, rocketReady;
 
 player = argument0;
 char = player.object;
@@ -42,6 +42,12 @@ keys = 0;
 // jump edge is flying a position-per-tick trajectory the generator validated, and an
 // extra jump or a step in the air permanently ruins it (M6 part 5).
 player.botFlyingEdge = false;
+
+// The rocket-jump hand-off is a request for ONE tick, cleared here for the same reason
+// botFlyingEdge is: every early return below must leave it off, or a bot that re-plans on
+// the tick it meant to take off keeps firing at its own feet for the rest of the round.
+player.botRocketAim = -1;
+player.botRocketFire = false;
 
 if(char == -1)
 {
@@ -329,6 +335,17 @@ braking = false;
 tracking = false;
 needVx = 0;
 jumpWantX = 0;
+// ⚠️ These two are only ASSIGNED inside the jump branch, and the in-flight tracker at the
+// bottom of this script runs for FALL edges as well - which hold their takeoff column the
+// same way an arc holds its trajectory. GM8's `var` declares without initialising, so
+// reading one on a fall raised "Unknown variable jumpDir" every single frame, from inside
+// GameServer's Begin Step, on a build that linted clean. A clean lint is not proof the
+// game runs; this cost one.
+//
+// jumpDir 0 and isRocket false are also the right VALUES for a fall: it is not a rocket,
+// and its horizontal plan is a column to hold rather than a direction to travel.
+jumpDir = 0;
+isRocket = false;
 
 if(edgeType == NAV_EDGE_DROPTHROUGH)
 {
@@ -388,8 +405,18 @@ else if(edgeType == NAV_EDGE_FALL)
         player.botFlyingEdge = true;
     }
 }
-else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
+else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP
+        or edgeType == NAV_EDGE_ROCKETJUMP)
 {
+    // A rocket jump is flown as a jump: same takeoff column, same recorded speed and
+    // duration, same position-per-tick tracker. Everything below is shared because the
+    // generator proved it the same way (gg2-nav-gen/src/rocketjump.js is jump.js's arc
+    // walk with a different impulse and gravity). Only three things differ, and each is
+    // marked where it happens: which reach model the takeoff gate asks, what else that
+    // gate demands before it will commit, and a check in the air that the rocket actually
+    // went off.
+    isRocket = (edgeType == NAV_EDGE_ROCKETJUMP);
+
     // The takeoff column is carried on the edge, because the generator searched for
     // it rather than assuming it. It is usually the end of the run facing the landing,
     // but where the landing surface is also what ends the run - climbing onto a crate -
@@ -569,15 +596,111 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
             // but knows nothing about the clearance cells the generator sampled along the
             // arc, and a bot that leaves backwards and catches up flies through none of
             // them.
-            if(vAlong >= 0 and vAlong <= needVx + BOT_JUMP_VTOL
-               and botJumpReach(char, needVx, flightTicks, vAlong) + BOT_JUMP_REACH_TOL >= jumpNeed)
+            //
+            // ⚠️ Which reach model, and it is not a detail. A rocket-jumping character is
+            // under moveStatus 1, where Begin Step's switch gives controlFactor 0.65 and
+            // frictionFactor 1 - and a friction of 1 means horizontal speed does not bleed
+            // at all for the whole flight. botJumpReach models the ordinary 0.85/1.15 and
+            // would be wrong in BOTH directions here: it under-rates how well a slow
+            // takeoff catches up (nothing takes the speed back off) and over-rates how
+            // easily a hot one sheds. botRocketReach's header has the numbers, and
+            // gg2-nav-gen's follow.js runs the same law before the edge is ever offered.
+            if(isRocket)
+                reachPx = botRocketReach(char, needVx, flightTicks, vAlong);
+            else
+                reachPx = botJumpReach(char, needVx, flightTicks, vAlong);
+
+            // What a rocket jump needs that no other edge does: a rocket. The weapon has a
+            // 30-tick refire and four rounds, so "ready" is a real gate and not a
+            // formality, and the health test is re-asked here because navFindPath only
+            // ever answered it at plan time - a route planned at 160hp is still installed
+            // at 35.
+            //
+            // ⚠️ Jumping without the rocket is the worst available outcome. The arc the
+            // follower is about to fly rises 276px; an ordinary jump rises 57. The bot
+            // would leave the ground, track a trajectory it cannot be on, and land
+            // somewhere the route does not mention - which costs an off-route fire and,
+            // on the second one, a blacklist on a perfectly good edge. So this gate
+            // refuses to leave rather than leaving badly.
+            rocketReady = true;
+            if(isRocket)
+            {
+                //
+                // Nested ifs rather than one and-chain, twice over: GM8's `and` does not
+                // short-circuit, so a guard folded in beside the access it guards is not a
+                // guard - and `char.currentWeapon != -1` has to come first because -1 is
+                // GM8's constant for `self`, which makes instance_exists(-1) true and
+                // `char.currentWeapon.readyToShoot` a silent read of this script's own
+                // caller.
+                rocketReady = false;
+                if(char.hp > NAV_RJ_DAMAGE)
+                {
+                    if(char.currentWeapon != -1)
+                    {
+                        if(instance_exists(char.currentWeapon))
+                        {
+                            if(char.currentWeapon.object_index == Rocketlauncher)
+                            {
+                                if(char.currentWeapon.readyToShoot)
+                                {
+                                    if(char.currentWeapon.ammoCount > 0)
+                                        rocketReady = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if(rocketReady and vAlong >= 0 and vAlong <= needVx + BOT_JUMP_VTOL
+               and reachPx + BOT_JUMP_REACH_TOL >= jumpNeed)
             {
                 wantJump = true;
                 player.botAirTicks = 0;
                 player.botTakeoffTicks = 0;
                 player.botRunupAt = -1;
                 player.botRejumped = false;
+
+                // The hand-off. botInputUpdate applies both after botCombatUpdate has run,
+                // which is the only place that can see both halves - see its header and
+                // Player's Create.
+                //
+                // 270 is straight down, and straight down is not a simplification of a
+                // richer choice - it is the only direction worth firing. `vectorfactor` in
+                // Rocket's blast is sqrt(sin^4 + cos^4), which is 1 only when the impulse
+                // is axis-aligned and falls to 0.707 at 45 degrees, so an angled rocket
+                // jump throws away up to 30% of its impulse. Down is also the one
+                // direction with guaranteed geometry to detonate against: there is a floor
+                // under the takeoff column by construction, and there may be nothing at
+                // all down-and-left of it.
+                //
+                // The aim SNAPS rather than slewing. botTurnRate is 8 degrees a tick at
+                // tier 3 and level-to-down is 90 degrees, so honouring the slew would mean
+                // eleven ticks of a bot standing still staring at the floor before every
+                // rocket jump - which is both a long time to be helpless and nothing like
+                // what a player looks like doing this. A player flicks down and fires.
+                if(isRocket)
+                {
+                    player.botRocketAim = 270;
+                    player.botRocketFire = true;
+                    player.botRocketJumps += 1;
+                }
             }
+            // Waiting for the launcher, and NOT falling through to the run-up below.
+            // Refire is 30 ticks against BOT_TAKEOFF_PATIENCE's 60, so the overwhelmingly
+            // common reason to be here is a rocket that is a second away - and the answer
+            // to that is to stand on the takeoff column and wait for it. Letting this case
+            // reach the `else` would start a run-up instead, walking the bot away from a
+            // jump it is about to be able to make and back again, which is the shuffle
+            // BOT_TAKEOFF_PATIENCE exists to end rather than a thing to spend it on.
+            //
+            // Standing still on the takeoff column is safe here where it is not elsewhere
+            // in this script: botTakeoffTicks is counting, so this cannot become a bot
+            // waiting forever, and the stuck detector is not fooled - it only fires when
+            // keys are pressed and nothing moves, and braking to a stop presses nothing
+            // once the bot is already still.
+            else if(isRocket and !rocketReady)
+                targetCol = takeoffCol;
             // Faster than the arc allows. Worth bleeding off even though the tracker can
             // correct it: with no key held GG2 sheds horizontal speed by only about 13% a
             // tick, so a bot arriving at 9 is still over 3 some eight ticks later.
@@ -617,6 +740,25 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
             // with an edge that keeps doing that.
             if(player.botTakeoffTicks >= BOT_TAKEOFF_PATIENCE)
             {
+                // ⚠️ The hatch does NOT apply to a rocket jump that has no rocket, and
+                // that exception is the whole reason it is written out here rather than
+                // left as it was. "Jump on whatever it has" is sound for an ordinary arc -
+                // it either works or it lands back where it started and the off-route
+                // machinery deals with it. On a rocket-jump edge with an empty or
+                // reloading launcher it is a bot leaping 57px up a 276px arc, every time,
+                // for as long as the route keeps being handed back.
+                //
+                // So the edge is taken away instead. That is the honest description of it:
+                // untraversable right now, by a bot that has been trying for two seconds.
+                // A* re-plans without it, the blacklist expires in BOT_BLACKLIST_TICKS,
+                // and by then the launcher has reloaded several times over.
+                if(isRocket and !rocketReady)
+                {
+                    botBlacklistEdge(player, cur, nxt, "rj");
+                    botPathPlan(player);
+                    return 0;
+                }
+
                 wantJump = true;
                 braking = false;
                 player.botAirTicks = 0;
@@ -664,6 +806,45 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
     else
     {
         player.botAirTicks += 1;
+
+        // ⚠️ Did the rocket actually go off? A rocket-jump arc is the only edge in the
+        // graph whose trajectory depends on something outside the follower's control
+        // happening on the takeoff tick, and there are several ways it can not happen: the
+        // rocket can be blocked by geometry between the gun and the muzzle, it can hit an
+        // enemy who walked in front of it, or the bot can have been put in the air by
+        // something that is not this takeoff at all - botRocketDodge's evasive hop is
+        // grounded-only but it fires on the tick BEFORE a takeoff perfectly happily.
+        //
+        // moveStatus is the game's own answer and it costs one read. Character's Begin
+        // Step sets it to 1 in the self-blast branch of Rocket's explosion and clears it
+        // on landing, so `moveStatus != 1` while airborne on this edge means the bot is
+        // flying an ordinary 57px jump along a 276px plan. Every tick spent tracking that
+        // takes it further from anywhere the route mentions, so it is cut immediately
+        // rather than left for the off-route detector to notice on landing.
+        //
+        // Checked from the second airborne tick rather than the first, which is one tick
+        // later than it strictly needs to be. The explosion runs in GameServer's Step on
+        // the takeoff tick, so moveStatus is already 1 by the time this script next runs -
+        // but the takeoff tick and the first airborne tick are only reliably distinct at
+        // delta_factor 1, and a guard that can fire on a healthy takeoff is worse than one
+        // that costs a tick of a 69-tick arc to be sure.
+        //
+        // What it does about it is to STOP FLYING, not to re-plan. Re-planning from mid-air
+        // is unsound - botPathPlan's start node is navNodeFromWorld(char.x, char.y), which
+        // above a gap is -1 and over a surface is whichever one happens to be within three
+        // rows - and blacklisting on the spot would take away a perfectly good edge for a
+        // transient cause. So the arc is simply abandoned: no tracking keys, botFlyingEdge
+        // left false so the evasion behaviours are free again, and the bot falls where an
+        // ordinary jump was always going to put it.
+        //
+        // The landing is then adjudicated by machinery that already exists and already has
+        // the right policy. It comes down on a surface the route does not mention, the
+        // off-route branch near the top of this script fires, and that branch gives the
+        // edge ONE retry before blacklisting it - which is exactly the right answer here,
+        // because the common causes are transient (an enemy walked into the rocket, the
+        // evasive hop got there first) and the uncommon one is not.
+        if(isRocket and player.botAirTicks > 1 and char.moveStatus != 1)
+            return 0;
 
         // The second impulse, on a NAV_EDGE_DOUBLEJUMP arc. NAV_EDGE_REJUMP is the tick
         // the generator proved the arc at, counted from takeoff the same way botAirTicks
@@ -750,10 +931,55 @@ if(braking)
 else if(tracking)
 {
     keys = keys & ~(KEY_LEFT | KEY_RIGHT);
+
+    // ⚠️ On a ROCKET-JUMP arc the press is also gated on SPEED, and without that gate
+    // the tracker does not converge at all.
+    //
+    // The bang-bang law below - behind the schedule, press; ahead of it, press back -
+    // is only stable because ordinary flight has friction 1.15 under it. Releasing the
+    // key there bleeds ~13% a tick, which is the damping term, and the bot settles onto
+    // the schedule. moveStatus 1 sets frictionFactor to 1: `hspeed /= 1` removes that
+    // term entirely, so every press is a permanent change of velocity and the
+    // controller limit-cycles instead of settling.
+    //
+    // Measured on ctf_truefort n551 -> n327, a 150px crossing that wants 2.6 px/tick:
+    // hspeed ran 1.80, 2.08, 2.33, 2.54, 2.54, 1.67, 0.92, 0.27, -0.29, -0.78 - it
+    // accelerated past the schedule, braked, and ended up travelling BACKWARDS, for an
+    // average near 0.6. The arc's height was fine (207px flown against 186px needed);
+    // it fell short sideways and blacklisted a good edge.
+    //
+    // With no friction the correct law is simply "reach the arc's speed and then stop
+    // pressing", because the generator proved the arc as a CONSTANT vx from tick 0 and
+    // an unfrictioned character holds whatever it reaches. So the forward press stops
+    // at needVx rather than at the position, and the braking press stops there too.
+    // Position still decides WHETHER to press; speed decides whether pressing can help.
+    //
+    // ⚠️ Four copies of this law: here, botRocketReach.gml (the takeoff gate),
+    // gg2-nav-gen/src/follow.js flyDistanceRocket (the generator's veto) and
+    // gg2-agent/tools/navfollow.js flyRocket (the report). Move one, move all four.
+    // ⚠️ The world-space test below is NOT "behind the schedule" on its own - which of
+    // the two branches is catching up and which is braking depends on jumpDir, because
+    // an arc travelling left is behind when the bot is to the RIGHT of the plan. The
+    // non-rocket path keeps the original unconditional presses, exactly as they were.
+    vAlong = char.hspeed * jumpDir;
     if(char.x < jumpWantX - 1)
-        keys |= KEY_RIGHT;
+    {
+        if(!isRocket)
+            keys |= KEY_RIGHT;
+        else if(jumpDir > 0 and vAlong < needVx)
+            keys |= KEY_RIGHT;
+        else if(jumpDir < 0 and vAlong > needVx)
+            keys |= KEY_RIGHT;
+    }
     else if(char.x > jumpWantX + 1)
-        keys |= KEY_LEFT;
+    {
+        if(!isRocket)
+            keys |= KEY_LEFT;
+        else if(jumpDir > 0 and vAlong > needVx)
+            keys |= KEY_LEFT;
+        else if(jumpDir < 0 and vAlong < needVx)
+            keys |= KEY_LEFT;
+    }
 }
 
 if(wantJump)

@@ -34,7 +34,7 @@ test_unit_begin();
 var nodes, edges, w, h, i;
 var oldMap, oldMd5, oldArea, oldSetup;
 var path, oldNodes, oldEdges, oldCount, oldEdgeCount, oldReady, testIdx, oldIdx;
-var djNodes, djEdges, djIdx;
+var djNodes, djEdges, djIdx, rjNodes, rjEdges, rjIdx;
 var oldRowStart, oldRowFor, oldRowForCount, testRow;
 
 // This suite may run against a server with a live nav graph. Every case below installs
@@ -825,6 +825,99 @@ global.navReady = false;
 ds_grid_destroy(djIdx);
 ds_grid_destroy(djEdges);
 ds_grid_destroy(djNodes);
+
+// ---------------------------------------------------------------------------
+// The rocket-jump class gate, which is the same shape one argument along.
+//
+// navFindPath's canRocket is argument7 and it is the second gate of its kind, so what is
+// worth pinning here is not that it works but that the two are INDEPENDENT: a Scout must
+// not inherit a Soldier's edges, a Soldier must not inherit a Scout's, and neither may be
+// switched on by the other's flag. The graph below carries one of each out of the same
+// node so that a single query has to get both answers right at once.
+//
+// The seven-argument call is the shape every caller written for the double jump uses, and
+// GM8 gives argument7 the value 0 there - so it must refuse the rocket jump while still
+// granting the double jump. That is the compatibility case, and it is the one a wrong
+// default would break silently.
+// ---------------------------------------------------------------------------
+
+rjNodes = ds_grid_create(NAV_NODE_FIELDS, 3);
+ds_grid_clear(rjNodes, 0);
+ds_grid_set(rjNodes, NAV_NODE_Y, 0, 60 - NAV_BOX_H);
+ds_grid_set(rjNodes, NAV_NODE_X0, 0, 0);
+ds_grid_set(rjNodes, NAV_NODE_X1, 0, 10);
+// Two ledges over the same source, one reachable only by a second jump and one only by a
+// rocket. 30 rows up is 180px - past a double jump's 114.8 and inside a rocket's 276.4.
+ds_grid_set(rjNodes, NAV_NODE_Y, 1, 45 - NAV_BOX_H);
+ds_grid_set(rjNodes, NAV_NODE_X0, 1, 11);
+ds_grid_set(rjNodes, NAV_NODE_X1, 1, 20);
+ds_grid_set(rjNodes, NAV_NODE_Y, 2, 30 - NAV_BOX_H);
+ds_grid_set(rjNodes, NAV_NODE_X0, 2, 21);
+ds_grid_set(rjNodes, NAV_NODE_X1, 2, 30);
+
+rjEdges = ds_grid_create(NAV_EDGE_FIELDS, 2);
+ds_grid_clear(rjEdges, 0);
+ds_grid_set(rjEdges, NAV_EDGE_FROM, 0, 0);
+ds_grid_set(rjEdges, NAV_EDGE_TO,   0, 1);
+ds_grid_set(rjEdges, NAV_EDGE_TYPE, 0, NAV_EDGE_DOUBLEJUMP);
+ds_grid_set(rjEdges, NAV_EDGE_COST, 0, 40);
+ds_grid_set(rjEdges, NAV_EDGE_GATE, 0, NAV_GATE_NONE);
+ds_grid_set(rjEdges, NAV_EDGE_REJUMP, 0, 14);
+ds_grid_set(rjEdges, NAV_EDGE_FROM, 1, 0);
+ds_grid_set(rjEdges, NAV_EDGE_TO,   1, 2);
+ds_grid_set(rjEdges, NAV_EDGE_TYPE, 1, NAV_EDGE_ROCKETJUMP);
+ds_grid_set(rjEdges, NAV_EDGE_COST, 1, 40);
+ds_grid_set(rjEdges, NAV_EDGE_GATE, 1, NAV_GATE_NONE);
+// A rocket jump has ONE impulse, so it carries no re-jump tick. botPathKeys' second-press
+// branch is inert on -1, which is the only thing stopping a rocket-jump arc growing an
+// extra jump half way along it.
+ds_grid_set(rjEdges, NAV_EDGE_REJUMP, 1, -1);
+
+global.navNodes = rjNodes;
+global.navEdges = rjEdges;
+global.navNodeCount = 3;
+global.navEdgeCount = 2;
+rjIdx = navEdgeIndex(rjEdges, 2, 3);
+global.navEdgeIdx = rjIdx;
+global.navRowFor = -1;
+global.navRowForCount = 0;
+global.navReady = true;
+
+// A healthy Soldier reaches the rocket ledge and NOT the Scout's.
+path = navFindPath(0, 2, TEAM_RED, false, -1, -1, false, true);
+test_assert_equals(true, path >= 0);
+test_assert_equals(2, ds_list_size(path));
+ds_list_destroy(path);
+test_assert_equals(-1, navFindPath(0, 1, TEAM_RED, false, -1, -1, false, true));
+
+// A Scout reaches its own ledge and NOT the rocket one.
+path = navFindPath(0, 1, TEAM_RED, false, -1, -1, true, false);
+test_assert_equals(true, path >= 0);
+test_assert_equals(2, ds_list_size(path));
+ds_list_destroy(path);
+test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, false, -1, -1, true, false));
+
+// Everything else - a Heavy, and a Soldier too hurt to survive the blast - gets neither.
+test_assert_equals(-1, navFindPath(0, 1, TEAM_RED, false, -1, -1, false, false));
+test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, false, -1, -1, false, false));
+
+// The SEVEN-argument call is every caller written for the double jump. argument7 defaults
+// to 0, so it must still grant the second jump and still refuse the rocket.
+path = navFindPath(0, 1, TEAM_RED, false, -1, -1, true);
+test_assert_equals(true, path >= 0);
+ds_list_destroy(path);
+test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, false, -1, -1, true));
+
+// And the six-argument call, which predates both, must refuse both.
+test_assert_equals(-1, navFindPath(0, 1, TEAM_RED, false, -1, -1));
+test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, false, -1, -1));
+
+test_assert_equals(-1, ds_grid_get(rjEdges, NAV_EDGE_REJUMP, navEdgeFind(0, 2)));
+
+global.navReady = false;
+ds_grid_destroy(rjIdx);
+ds_grid_destroy(rjEdges);
+ds_grid_destroy(rjNodes);
 
 // ---------------------------------------------------------------------------
 // The cache key distinguishes internal maps, which all advertise an empty MD5.

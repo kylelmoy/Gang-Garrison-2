@@ -39,7 +39,7 @@
 /// list. This is the only moment a stale one could affect anything, so it needs no
 /// timer of its own.
 
-var player, char, startNode, goalNode, thrash, edgeKey, expiry, prevFrom, prevTo, newPath;
+var player, char, startNode, goalNode, thrash, edgeKey, expiry, prevFrom, prevTo, newPath, canRocket;
 player = argument0;
 char = player.object;
 
@@ -132,9 +132,42 @@ botOccupancyAdd(player, -1);
 // Step) and Scout's Create event is the only thing that sets it. A class list here would
 // be a second copy of that fact, and the two would disagree the first time a class gained
 // or lost the ability.
+//
+// canRocket is the same idea one step further on. It is read off the WEAPON rather than
+// the class for the reason the paragraph above gives about canDoublejump - firing a rocket
+// at your own feet is a thing a Rocketlauncher does, not a thing a CLASS_SOLDIER does, and
+// a class list here would be a second copy of that fact - and it carries an hp test as
+// well, because a rocket jump costs NAV_RJ_DAMAGE and a bot that cannot survive one must
+// not be routed over it.
+//
+// Strictly greater, not >=: the damage is dealt before the bot lands, so equal health is
+// a bot that dies in mid-air on an edge it was told to fly. There is no margin beyond
+// that on purpose - a rocket jump taken at 31hp is a real thing a player does, and the
+// point of these edges is a bot that reads like a player.
+//
+// The `!= -1` is not belt-and-braces. GM8's -1 is the constant for `self`, so
+// instance_exists(-1) is TRUE and char.currentWeapon.object_index on a -1 sentinel
+// silently reads the CALLER's object_index - which would be Player here, never
+// Rocketlauncher, so it would fail quietly in the safe direction today and stop doing so
+// the moment this is copied somewhere else. GG2 uses -1 as its "nothing" sentinel
+// throughout (see gg2-agent/GML.md); instance_exists cannot substitute for the test.
+// Separate ifs throughout because GM8's `and` does not short-circuit.
+canRocket = false;
+if(char.currentWeapon != -1)
+{
+    if(instance_exists(char.currentWeapon))
+    {
+        if(char.currentWeapon.object_index == Rocketlauncher)
+        {
+            if(char.hp > NAV_RJ_DAMAGE)
+                canRocket = true;
+        }
+    }
+}
+
 newPath = navFindPath(startNode, goalNode, player.team, char.intel,
                       player.botBlacklist, botOccupancyMap(player.team),
-                      char.canDoublejump);
+                      char.canDoublejump, canRocket);
 player.botReplans += 1;
 
 if(newPath < 0)

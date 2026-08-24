@@ -76,6 +76,25 @@
     // the game gives the jump back on landing (Character's Begin Step zeroes
     // doublejumpUsed while onground).
     botRejumped = false;
+    // The rocket-jump hand-off, and the first time navigation has ever had an opinion
+    // about where a bot is AIMING. botInputUpdate's header states the invariant these
+    // three break: "combat owns ATTACK and SPECIAL, navigation owns LEFT/RIGHT/JUMP/DOWN".
+    // A rocket jump needs the aim pointed at the bot's own feet and the trigger pulled on
+    // the same tick it jumps, and both of those belong to botCombatUpdate.
+    //
+    // So botPathKeys does not take them - it ASKS, by setting these, and botInputUpdate
+    // arbitrates after both halves have run. That keeps the two scripts independent (each
+    // still returns its own keys, knowing nothing about the other) and puts the one place
+    // they conflict in the one script whose job is already to see both.
+    //
+    // botRocketAim is -1 for "no request", or the aimDirection degrees to snap to.
+    botRocketAim = -1;
+    // Whether the request also wants the trigger. Kept separate from the aim rather than
+    // folded into one flag because they are answers to different questions - "point here"
+    // and "shoot now" - and the aim override is the half that would be reused by anything
+    // else navigation ever needs to look at. Today botPathKeys always sets both together,
+    // because the aim SNAPS and so needs no lead time.
+    botRocketFire = false;
     botBlacklist = -1;
     botBlacklistQ = -1;
     // Which edge last put the bot somewhere its route did not go, and how many times in
@@ -210,6 +229,10 @@
     // running server, and every other way of asking it - watching one bot, sampling who is
     // mid-arc - misses a manoeuvre that lasts under a second.
     botDoubleJumps = 0;
+    // How many rocket jumps this bot has taken, for exactly the reason botDoubleJumps
+    // exists: whether these edges ever actually fire is a question about a running server,
+    // and a manoeuvre that is over in a second is not something sampling can catch.
+    botRocketJumps = 0;
     botBlacklistFires = 0;
     // What was blacklisted, not just how often - "off:251>254@1830,stk:254>255@1902",
     // reason:from>to@frame, comma separated and deliberately space-free so the scenario

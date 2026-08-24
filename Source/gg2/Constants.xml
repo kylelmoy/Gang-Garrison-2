@@ -181,7 +181,7 @@
   <constant name="NAV_EDGE_DOUBLEJUMP" value="5"/>
   <constant name="NAV_EDGE_ROCKETJUMP" value="6"/>
   <constant name="NAV_EDGE_STICKYJUMP" value="7"/>
-  <constant name="NAV_CACHE_VERSION" value="14"/>
+  <constant name="NAV_CACHE_VERSION" value="15"/>
   <constant name="NAV_BUILD_IDLE" value="0"/>
   <constant name="NAV_BUILD_DONE" value="9"/>
   <constant name="NAV_MAX_FALL" value="150"/>
@@ -199,8 +199,44 @@
   <constant name="NAV_DJ_MAX_TICKS" value="90"/>
   <constant name="NAV_DJ_TICK_TRIES" value="5"/>
   <constant name="NAV_DJ_MAX_PER_SIDE" value="2"/>
-  <constant name="NAV_DJ_PENALTY" value="12"/>
+  <constant name="NAV_DJ_PENALTY" value="40"/>
   <constant name="NAV_DJ_SKIP_HOPS" value="3"/>
+  <!-- Rocket jumping. A Soldier firing at its own feet on the tick it jumps: the
+       explosion adds NAV_RJ_IMPULSE upward and Rocket's self-blast branch then multiplies
+       the whole velocity by NAV_RJ_SPEEDUP, so the launch is
+       (NAV_JUMP_V0 + NAV_RJ_IMPULSE) * NAV_RJ_SPEEDUP = 14.40 px/tick against an ordinary
+       jump's 8.3, under NAV_RJ_GRAVITY rather than NAV_JUMP_GRAVITY. That is a 192px apex
+       - three and a third ordinary jumps of height - for NAV_RJ_DAMAGE hp.
+       See gg2-nav-gen/src/rocketjump.js.
+
+       WARNING: NAV_RJ_IMPULSE is 5.285 and Rocket's `knockback` is 8. That gap is the
+       single most important number here and it was MEASURED, not derived - the first
+       version of this shipped 8, promised a 276px apex, and produced edges the follower
+       flew 206px of and then blacklisted.
+
+       The loss is NOT distance falloff: measured self-damage on a real rocket jump is the
+       full 29.5-30.0 of NAV_RJ_DAMAGE, so fake_distance is ~0. It is `vectorfactor`, which
+       is sqrt(sin^4 + cos^4) of the direction FROM the blast TO the character and is 1
+       only when that direction is axis-aligned. Rocketlauncher/Create sets xoffset = -15,
+       so the gun - and the muzzle 20px along aimDirection from it - sits about 15px to one
+       side of the character. A rocket aimed straight down therefore detonates down AND to
+       the side, roughly 15px across and 20px below, which is ~53 degrees rather than 90,
+       where vectorfactor is ~0.736. 8 * 0.736 = 5.885 nominal, and the launch velocity
+       measured live on real bot rocket jumps is a reproducible -14.40, which back-solves
+       to 5.285 in the (NAV_JUMP_V0 + I) * NAV_RJ_SPEEDUP convention this model uses.
+
+       So "straight down" is already an angled rocket jump, and there is no aim that makes
+       it not one without compensating for the gun offset. -->
+  <constant name="NAV_RJ_IMPULSE" value="5.285"/>
+  <constant name="NAV_RJ_SPEEDUP" value="1.06"/>
+  <constant name="NAV_RJ_GRAVITY" value="0.54"/>
+  <constant name="NAV_RJ_CONTROL" value="0.65"/>
+  <constant name="NAV_RJ_FRICTION" value="1"/>
+  <constant name="NAV_RJ_DAMAGE" value="30"/>
+  <constant name="NAV_RJ_MAX_TICKS" value="100"/>
+  <constant name="NAV_RJ_MAX_PER_SIDE" value="2"/>
+  <constant name="NAV_RJ_PENALTY" value="10"/>
+  <constant name="NAV_RJ_SKIP_HOPS" value="1"/>
   <constant name="BOT_REPLAN_TICKS" value="45"/>
   <constant name="BOT_STUCK_TICKS" value="12"/>
   <constant name="BOT_OFFPATH_TICKS" value="20"/>

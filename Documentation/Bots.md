@@ -42,7 +42,10 @@ Design rule: bots must be expressible entirely through *existing* wire messages.
    *Generating nav graphs* below). Nodes are run-length-encoded standable surfaces; edges are
    analytic rather than a full trajectory fan, each generator using GG2's own movement numbers —
    walks and one-cell steps, straight-down falls, drop-throughs, jump arcs against the real
-   `v0`/gravity envelope, and movebox pushes. The fan of F35 remains the endpoint; what is built is
+   `v0`/gravity envelope, the Scout's double jump, the Soldier's rocket jump, and movebox pushes.
+   The last two are **class-gated**: one graph still serves the whole roster, and `navFindPath`
+   refuses type 5 to anything without `canDoublejump` and type 6 to anything that is not a Soldier
+   with the health to survive the blast. The fan of F35 remains the endpoint; what is built is
    its cheap first pass, and every edge it emits has to be one a bot can actually execute. What
    ships in `Scripts/BotNav/` is the *reading* half: the cache loader, the two indices it derives,
    world-to-node resolution, and A\* over the result.
@@ -398,3 +401,34 @@ Two things stay in sync by hand:
     line to it. `Scripts/Unit tests/botskill/` grew to 246 assertions.
   - **Still not implemented**: Demoman sticky-jumping, field of view as a difficulty knob, bots
     targeting sentries, per-class route costs, and per-class difficulty knobs.
+
+- **M9** — class-specific movement edges: implemented and verified live.
+  - **The Scout's double jump** (`NAV_EDGE_DOUBLEJUMP`, type 5). Its own flight model, its own
+    fan, its own quota, refused to every other class by `navFindPath`'s seventh `canDouble`
+    argument. 2,382 edges over 24 graphs.
+  - **The Soldier's rocket jump** (`NAV_EDGE_ROCKETJUMP`, type 6), 16,018 edges. The whole
+    manoeuvre is **one tick**: `Character`'s Begin Step runs its attack branch before its jump
+    branch, and `move_all_bullets` detonates in the same step, so the bot fires at its own feet
+    and jumps together. Refused by an eighth `canRocket` argument, which is not a property of the
+    class alone — the manoeuvre costs `NAV_RJ_DAMAGE` hp, so it is computed from live weapon and
+    health and a Soldier's routes shed their rocket jumps as it takes damage.
+  - **The first negotiated hand-off between the two input halves.** `botInputUpdate`'s standing
+    invariant is that combat owns ATTACK/SPECIAL and navigation owns LEFT/RIGHT/JUMP/DOWN. A
+    rocket jump needs the trigger *and* the aim, both combat's. Navigation does not take them: it
+    sets `botRocketAim`/`botRocketFire` and `botInputUpdate` applies them after **both** halves
+    have run, which is the only place that can see both. The aim snaps rather than slewing —
+    `botTurnRate` would otherwise mean ~11 ticks of a bot standing still staring at the floor
+    before every jump.
+  - **Two bugs only the live run caught**, both worth remembering. The impulse was derived rather
+    than measured and was wrong by 44%: `Rocketlauncher`'s muzzle offset makes a "straight down"
+    rocket jump an angled one, `vectorfactor` eats ~26%, and the real launch is a reproducible
+    −14.40 for a 192px apex rather than −17.28 for 276px. And the in-flight tracker does not
+    converge at `frictionFactor 1` — the bang-bang law is only stable because ordinary friction
+    damps it, so without that it limit-cycles and the bot travels *backwards*; the press is gated
+    on speed as well as position now.
+  - **Verified live**: 29 rocket jumps over ~17,700 frames on a mixed roster, neither new failure
+    guard ever firing, all 11 saved bot scenarios still passing, and `navfollow` back to 0
+    unflyable arcs over all 24 graphs.
+  - **Still not implemented**: **angled** rocket jumps. Measured, a 45° blast trades the 192px
+    climb for ~140px of climb *and* ~247px of horizontal travel that friction never bleeds — real
+    capability the graph currently has no edge type for.

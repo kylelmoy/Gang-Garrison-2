@@ -1,4 +1,4 @@
-/// navFindPath(startNode, goalNode, team, hasIntel, blocked, occupancy)
+/// navFindPath(startNode, goalNode, team, hasIntel, blocked, occupancy, canDouble, canRocket)
 /// A* over the built nav graph, for a character of `team` carrying the intel or not.
 /// Returns a ds_list of node indices from startNode to goalNode inclusive, or -1 if
 /// the goal is unreachable or the graph is not ready. The caller owns the returned
@@ -109,7 +109,21 @@
 /// query - gets the pre-existing graph, which is the conservative answer. The failure mode
 /// of the opposite default is a Heavy routed over an arc it physically cannot fly.
 ///
-var startNode, goalNode, team, hasIntel, blocked, occupancy, canDouble, openSet, gScore, cameFrom, closed;
+/// `canRocket` is the eighth argument and is the same shape again, for
+/// NAV_EDGE_ROCKETJUMP. It differs from canDouble in one way that matters: it is not a
+/// property of the CLASS alone. A rocket-jump edge costs NAV_RJ_DAMAGE hp to traverse, so
+/// whether a character may take one depends on how much health it has right now, and the
+/// answer changes during a single life. botPathPlan computes it per query (see there for
+/// why the test is the weapon rather than the class), and because re-planning is on a
+/// timer, a Soldier's routes shed their rocket jumps on their own as it takes damage.
+///
+/// ⚠️ Health is a plan-time gate and it cannot be the only one. This refuses every
+/// rocket-jump edge to a bot that cannot afford ONE; it has no way to say "you can afford
+/// two of the three on this route". botPathKeys re-asks the same question at each takeoff
+/// and blacklists the edge it cannot pay for, which is the machinery that already exists
+/// for an edge that turns out to be untraversable.
+///
+var startNode, goalNode, team, hasIntel, blocked, occupancy, canDouble, canRocket, openSet, gScore, cameFrom, closed;
 var current, nb, e, eStart, eCount, i, tentative, path, guard, cost, eKey;
 var gx, gy, cx, cy, nx, ny;
 
@@ -120,6 +134,7 @@ hasIntel = argument3;
 blocked = argument4;
 occupancy = argument5;
 canDouble = argument6;
+canRocket = argument7;
 
 if(!global.navReady)
     return -1;
@@ -188,6 +203,13 @@ while(!ds_priority_empty(openSet))
         if(!canDouble)
         {
             if(ds_grid_get(global.navEdges, NAV_EDGE_TYPE, i) == NAV_EDGE_DOUBLEJUMP)
+                continue;
+        }
+
+        // The same gate for rocket jumps, and its own if for the same reason again.
+        if(!canRocket)
+        {
+            if(ds_grid_get(global.navEdges, NAV_EDGE_TYPE, i) == NAV_EDGE_ROCKETJUMP)
                 continue;
         }
 

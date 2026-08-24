@@ -20,6 +20,20 @@
 /// and SPECIAL, navigation owns LEFT/RIGHT/JUMP/DOWN - so the bot shoots while it walks,
 /// exactly as a player does.
 ///
+/// ⚠️ There is now exactly ONE exception to that, and it is negotiated here rather than
+/// taken: a **rocket jump**. NAV_EDGE_ROCKETJUMP is an arc that only exists because the
+/// bot fires a rocket at its own feet on the tick it jumps, so following one needs the
+/// trigger (combat's) and the aim (combat's, and rewritten by it every single tick)
+/// pointed somewhere combat would never choose.
+///
+/// botPathKeys does not reach into either. It sets player.botRocketAim and
+/// player.botRocketFire and returns its own keys as usual; this script applies them after
+/// BOTH halves have run and decided for themselves. That ordering is the whole design -
+/// it keeps the two scripts independent, and it puts the one place they genuinely conflict
+/// in the one script whose job is already to see both. It is also why the override is
+/// written after the engage and back-off blocks below: those touch LEFT/RIGHT only, and a
+/// rocket jump wants them left exactly as the follower set them.
+///
 /// On top of those sit two small movement behaviours that are neither route-following nor
 /// firing policy, and that both belong here because here is the only place that can see
 /// both halves at once:
@@ -256,6 +270,45 @@ if(subject != noone and char.onground and player.botVisible)
                 navKeys |= KEY_RIGHT;
         }
     }
+}
+
+// The rocket-jump hand-off (see the header). botPathKeys sets these on the one tick it
+// wants to take off, and clears them on every other tick and every early return, so this
+// is inert for every bot that is not leaving the ground on a NAV_EDGE_ROCKETJUMP edge
+// right now.
+//
+// The aim is written AFTER botCombatUpdate rather than instead of it, and it SNAPS. Both
+// matter:
+//
+//   after   botCombatUpdate writes char.aimDirection unconditionally, in two separate
+//           branches, on every tick. Asking it politely to make an exception would mean a
+//           third branch in a script that has no idea a nav graph exists. Overwriting the
+//           value it just wrote is one line and cannot be got wrong.
+//
+//   snaps   player.botAimDir is the slewed aim and botTurnRate is 8 degrees a tick at the
+//           top tier, so turning from level to straight down is eleven ticks of a bot
+//           standing motionless staring at the floor before every single rocket jump.
+//           That is not what tracking lag is for and it is not what a player looks like:
+//           a player flicks the crosshair down and fires in the same motion. botAimDir is
+//           moved with it rather than around it, so the slew resumes from where the aim
+//           actually is once the jump is over, instead of snapping back on the next tick.
+//
+// ⚠️ Character's Begin Step reads aimDirection when it fires the weapon, and reads
+// keyState for the ATTACK bit, in that same event and on this same tick - the ordering
+// every other bot weapon already depends on. Rocketlauncher/User Event 3 spawns the rocket
+// 20px along aimDirection, so the aim must be down BEFORE the trigger is seen, which is
+// exactly what writing both here achieves.
+if(player.botRocketAim >= 0)
+{
+    player.botAimDir = player.botRocketAim;
+    player.botAimWant = player.botRocketAim;
+    with(char)
+    {
+        aimDirection = player.botRocketAim;
+        netAimDirection = aimDirection*65536/360;
+    }
+    if(player.botRocketFire)
+        fireKeys |= KEY_ATTACK;
 }
 
 with(char)
