@@ -113,8 +113,24 @@ if(tick < player.botRegroupUntil)
 // what it was: the hold was applied to whatever botPathKeys returned, with no idea whether
 // the bot was walking or airborne. Same reasoning as every other behaviour here (M6 part 5),
 // and this one simply predated the rule.
+//
+// ⚠️ And clear the stuck counter, which is the other half of the same mistake. botPathKeys
+// runs its detector on the keys it INTENDS to press - `if(!moved and keys != 0)` - and then
+// returns them for this line to throw away. So a bot in the regroup hold is standing still
+// on purpose while the follower believes it is pressing a direction and going nowhere, and
+// every BOT_STUCK_TICKS it blacklists one of its own spawn room's exits. A 90-tick hold is
+// seven of those windows, which is why the census finds one spawn node with five or six
+// exits banned twelve ticks apart, on eight different maps. Measured 2026-08-23: the
+// position trace through such a window decays 0.49, 0.42, 0.37, 0.32, 0.27, 0.24, 0.20
+// px/tick - pure friction, no input, and every tick of it under the detector's half-pixel
+// floor. The counter is cleared here rather than gated inside botPathKeys because this is
+// the line that decides the bot is not trying to move, and the detector's question is only
+// meaningful about keys that were actually delivered.
 if(holding and char.onground and !player.botFlyingEdge)
+{
     navKeys = navKeys & ~(KEY_LEFT | KEY_RIGHT);
+    player.botStuckTicks = 0;
+}
 
 // Dodge an incoming rocket (M7 4.3). One fired flat across open ground cannot be dodged
 // without jumping, and a bot that just stands there reads as having no self-preservation
