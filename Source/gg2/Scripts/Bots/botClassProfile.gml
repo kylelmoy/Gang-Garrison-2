@@ -70,6 +70,9 @@
 ///                        the slew has to have caught up with the solved aim before the
 ///                        trigger is allowed. Above 1 is a class that shoots while still
 ///                        turning.
+///   BOT_CP_CLOSE_IN      botInputUpdate. How near this class wants to be before it stops
+///                        walking its route and fights, in px. 0 - the default - means
+///                        stand and fight where you are.
 ///
 /// ⚠️ The two aim fields are multipliers applied where the knob is USED, not written into
 /// the knob by botSkillApply. Two reasons. botSkillApply runs once, from botAdd, so a
@@ -94,6 +97,26 @@
 ///                   not want a tight cone. Paired with a loose settle (2.0), so it opens
 ///                   up while still turning rather than tracking silently and then
 ///                   deleting someone.
+///   Sniper (0.3)    The tightest in the table, and it corrects an omission rather than
+///                   expressing a preference. Aim error here is ANGULAR and the same at
+///                   every distance, but botClassRange is 900 for this class against 500
+///                   for a Heavy or Demoman and 220 for a Scout - so the identical number
+///                   of degrees buys four times the linear miss, on the one class that is
+///                   true hitscan and therefore has nothing else to blame. At tier 3 the
+///                   spread on the first legal shot was +/-6.8 deg, which is +/-71 px at
+///                   600 and +/-107 px at 900 against a body ~46 px tall: the shot lands a
+///                   storey high about as often as it lands. Reported from play as snipers
+///                   shooting well off target, often at the ceiling, and the upward half of
+///                   a symmetric error is exactly what that looks like indoors. 0.3 brings
+///                   the first legal shot to +/-2.0 deg, or +/-25 px at 700 - about one
+///                   body width. Paired with BOT_CP_SETTLE_TIGHT for the reason given at
+///                   that row: at this range the settle gate was the wider of the two.
+///
+///                   Still open, and deliberately not changed here: BOT_POTSHOT_MULT is
+///                   1.7, so this class speculates out to 1530 px, where even 2 deg is
+///                   +/-53 px. Tightening the cone does not make a potshot at half the map
+///                   a good shot; if that reads badly it wants its own gate rather than a
+///                   smaller multiplier for everyone.
 ///
 /// The positioning modes, and the reasoning behind each assignment:
 ///
@@ -211,13 +234,37 @@ switch(field)
             return BOT_CP_AIM_ERR_TIGHT;
         if(class == CLASS_HEAVY)
             return BOT_CP_AIM_ERR_LOOSE;
+        if(class == CLASS_SNIPER)
+            return BOT_CP_AIM_ERR_SNIPER;
         return 1;
 
     case BOT_CP_AIM_SETTLE:
         // Area denial does not want to wait for the slew to catch up at all.
         if(class == CLASS_HEAVY)
             return BOT_CP_SETTLE_LOOSE;
+        // The Sniper is the opposite end of the same argument - see BOT_CP_AIM_ERR above.
+        // Tightening the error alone would have bought nothing, because the settle gate is
+        // the wider of the two at this class's range: BOT_AIM_SETTLE_DEG is a flat 3 deg,
+        // which is 47 px at 900 and would have swamped a 0.3 error multiplier whole.
+        if(class == CLASS_SNIPER)
+            return BOT_CP_SETTLE_TIGHT;
         return 1;
+
+    case BOT_CP_CLOSE_IN:
+        // The distance this class wants to be at before it stops walking and fights, for
+        // the engage hold in botInputUpdate. 0 is "no opinion": hold wherever the hold
+        // caught you, which is right for everyone whose weapon already reaches across its
+        // whole attention band.
+        //
+        // Only the Pyro, and it is not a preference - without this row the engage hold makes
+        // the Pyro strictly worse. botClassRange is 200 for this class deliberately, so it
+        // keeps tracking a target while it closes, but BOT_FLAME_REACH is 165 and
+        // botClassKeys refuses the trigger past it. A hold that fires at 200 therefore stops
+        // the Pyro 35 px short of being able to shoot at all, and it stands there. Closing
+        // to the reach and then holding is what the 200 was for in the first place.
+        if(class == CLASS_PYRO)
+            return BOT_FLAME_REACH;
+        return 0;
 
     case BOT_CP_SPOT_HIGH:
         // A Sniper values height more than anything else does: elevation is what turns a

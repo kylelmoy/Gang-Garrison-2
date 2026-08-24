@@ -221,14 +221,12 @@
   <constant name="BOT_FEET_OFFSET" value="20"/>
   <constant name="BOT_SPLASH_SAFE" value="110"/>
   <constant name="BOT_FLAME_REACH" value="165"/>
-  <constant name="BOT_AIRBLAST_RANGE" value="150"/>
   <constant name="BOT_DODGE_RANGE" value="320"/>
   <constant name="BOT_DODGE_TICKS" value="26"/>
   <constant name="BOT_BODY_HALFW" value="12"/>
   <constant name="BOT_BODY_UP" value="13"/>
   <constant name="BOT_BODY_DOWN" value="23"/>
   <constant name="BOT_ROCKET_RADIUS" value="8"/>
-  <constant name="BOT_AIRBLAST_ARC" value="75"/>
   <constant name="BOT_HEAL_RANGE" value="300"/>
   <constant name="BOT_UBER_RANGE" value="200"/>
   <constant name="BOT_MINE_TRIGGER" value="30"/>
@@ -265,7 +263,10 @@
   <constant name="BOT_STAB_LEAD_MAX" value="38"/>
   <constant name="BOT_STAB_REACH" value="37"/>
   <constant name="BOT_STAB_BACK" value="26"/>
-  <constant name="BOT_AIRBLAST_MIN_TRAVEL" value="120"/>
+  <constant name="BOT_AIRBLAST_MIN_TRAVEL" value="60"/>
+  <constant name="BOT_AIRBLAST_NEAR" value="28"/>
+  <constant name="BOT_AIRBLAST_REACH" value="126"/>
+  <constant name="BOT_AIRBLAST_HALFW" value="18"/>
   <constant name="BOT_BALL_SPD" value="0"/>
   <constant name="BOT_BALL_GRAV" value="1"/>
   <constant name="BOT_BALL_DRIFT" value="2"/>
@@ -291,6 +292,8 @@
   <constant name="BOT_CP_AIM_ERR_TIGHT" value="0.6"/>
   <constant name="BOT_CP_AIM_ERR_LOOSE" value="1.6"/>
   <constant name="BOT_CP_SETTLE_LOOSE" value="2"/>
+  <constant name="BOT_CP_AIM_ERR_SNIPER" value="0.3"/>
+  <constant name="BOT_CP_SETTLE_TIGHT" value="0.3"/>
   <constant name="BOT_CP_SUPPRESS" value="11"/>
   <constant name="BOT_SUPPRESS_HOPS" value="24"/>
   <constant name="BOT_SPOT_NONE" value="0"/>
@@ -304,4 +307,9 @@
   <constant name="BOT_DEFEND_AVERSE" value="6"/>
   <constant name="BOT_SPOT_NEAR_FRAC" value="0.5"/>
   <constant name="BOT_SPOT_HIGH_SNIPER" value="3"/>
+  <constant name="BOT_CP_CLOSE_IN" value="12"/>
+  <constant name="BOT_ENGAGE_TICKS" value="150"/>
+  <constant name="BOT_ENGAGE_GOAL_NEAR" value="260"/>
+  <constant name="BOT_ENGAGE_STEP" value="16"/>
+  <constant name="BOT_ENGAGE_DROP" value="28"/>
 </constants>

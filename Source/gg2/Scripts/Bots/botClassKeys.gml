@@ -112,10 +112,17 @@ switch(player.class)
 
         // Airblast is a reflex, not an attack: it costs 40 ammo and there is no point
         // spending it on empty air.
+        //
+        // readyToBlast is checked first and is not decoration. The blast is on a 40-tick
+        // cooldown (blastReloadTime) and the reflect test inside User Event 2 runs only on
+        // the frame of the press, so the cost of a press aimed at nothing is not the ammo -
+        // it is that the next rocket, the one that was going to land, arrives while the
+        // weapon is still reloading. It is also much the cheapest of the three tests and
+        // gates the other two regardless of geometry.
         if(instance_exists(weapon))
         {
-            if(weapon.ammoCount >= 40
-               and botIncomingProjectile(char, BOT_AIRBLAST_RANGE, BOT_AIRBLAST_MIN_TRAVEL))
+            if(weapon.readyToBlast and weapon.ammoCount >= 40
+               and botIncomingProjectile(char, BOT_AIRBLAST_MIN_TRAVEL))
                 keys |= KEY_SPECIAL;
         }
         break;

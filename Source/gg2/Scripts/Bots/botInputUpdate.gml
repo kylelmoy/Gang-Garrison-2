@@ -26,10 +26,37 @@
 ///
 ///   dodge      (M7 4.3) jump when a rocket is incoming. One fired flat across open ground
 ///              cannot be dodged any other way.
+///   engage     stop walking the route and fight an enemy that is in front of you.
 ///   back off   (M7 2.4/3.2) walk away from an enemy that is inside this class's minimum
 ///              band. Two bots that walk into each other otherwise stand nose to nose
 ///              with a degenerate aim solve and neither can shoot; and a Soldier pinned
 ///              at point-blank range cannot fire at all without killing itself.
+///
+/// The engage hold is the newest of the three and the one that changes how the bots read
+/// most, so the reasoning is worth stating. Before it, the two halves ORed above never
+/// negotiated at all: botPathKeys contains no reference to botTarget, so a bot with a live
+/// enemy in front of it kept walking its A* route and fired sideways as it went. Reported
+/// from play as bots running past a player rather than engaging, which is exactly what the
+/// code did - the only thing that had ever overridden route-following was the back-off, and
+/// that fires inside 40 px.
+///
+/// Four things stop it deciding the round on its own, and each is load-bearing:
+///
+///   the carrier    a bot holding the intel never holds. A capture is the thing that ends a
+///                  round, and a carrier that stops to duel is a round that does not end.
+///   the objective  within BOT_ENGAGE_GOAL_NEAR of its own goal a bot keeps walking. Close
+///                  to the point, taking the point beats winning the fight in front of it.
+///   the clock      the hold expires BOT_ENGAGE_TICKS after the target was acquired. A
+///                  firefight normally resolves well inside that; the cap is there for the
+///                  one that does not - two bots either side of a gap, each visible to the
+///                  other and neither able to finish it - which would otherwise be two bots
+///                  standing still for the rest of the round, and with twelve of them, a map
+///                  that quietly stops playing. Measured from botTargetAt rather than from
+///                  when the hold began, so re-acquiring is what buys another window and a
+///                  bot cannot renew its own stalemate by looking away and back.
+///   the ground     a class with a BOT_CP_CLOSE_IN walks at its target instead of holding,
+///                  and that is the first press in this file that no route validated. It
+///                  goes through botStepSafe for that reason.
 ///
 /// KEY_JUMP is edge-triggered in Character's Begin Step (pressedKeys & $80), which is what
 /// makes ORing the dodge in safe: a press cannot double a jump the follower already wants,
@@ -42,7 +69,7 @@
 /// cloaks on the rising edge of KEY_SPECIAL.
 
 var player, char, tick, navKeys, fireKeys, evadeKeys, alive;
-var subject, minBand, mates, holding;
+var subject, minBand, mates, holding, engaging, closeIn, subjDist, goalDist, stepDir;
 
 player = argument0;
 char = player.object;
@@ -152,13 +179,69 @@ evadeKeys = 0;
 if(char.onground and botRocketDodge(char))
     evadeKeys = KEY_JUMP;
 
+// Stand and fight, instead of walking past (see the header for why each gate is here).
+//
+// The same onground and !botFlyingEdge guard as the regroup hold above, for the same
+// reason: stripping LEFT/RIGHT part-way through a validated jump arc is not a pause, it is
+// a different jump. And the same botStuckTicks clear, for the other half of that same
+// mistake - botPathKeys runs its stuck detector on the keys it INTENDS to press, so a bot
+// deliberately standing still looks to the detector like a bot pressing a direction and
+// going nowhere, and it starts blacklisting the edges under its own feet.
+subject = player.botTarget;
+engaging = false;
+subjDist = 0;
+if(subject != noone and char.onground and player.botVisible and !player.botFlyingEdge
+   and !char.intel)
+{
+    if(instance_exists(subject))
+    {
+        subjDist = point_distance(char.x, char.y, subject.x, subject.y);
+        goalDist = BOT_ENGAGE_GOAL_NEAR + 1;
+        if(player.botHasGoal)
+            goalDist = point_distance(char.x, char.y, player.botGoalX, player.botGoalY);
+
+        if(subjDist <= botClassRange(player.class)
+           and goalDist > BOT_ENGAGE_GOAL_NEAR
+           and tick - player.botTargetAt <= BOT_ENGAGE_TICKS)
+            engaging = true;
+    }
+}
+
+if(engaging)
+{
+    navKeys = navKeys & ~(KEY_LEFT | KEY_RIGHT);
+    player.botStuckTicks = 0;
+
+    // A class that has to be nearer than its attention band before it can shoot walks at
+    // the target rather than stopping where the hold caught it. Only the Pyro today; the
+    // row explains itself in botClassProfile.
+    closeIn = botClassProfile(player.class, BOT_CP_CLOSE_IN);
+    if(closeIn > 0 and subjDist > closeIn)
+    {
+        stepDir = 1;
+        if(subject.x < char.x)
+            stepDir = -1;
+        if(botStepSafe(char, stepDir))
+        {
+            if(stepDir > 0)
+                navKeys |= KEY_RIGHT;
+            else
+                navKeys |= KEY_LEFT;
+        }
+    }
+}
+
 // Back away from anything inside this class's minimum band (M7 2.4/3.2). Only from a
 // target the bot can actually see - a remembered one behind a wall (M7 3.8) is not a
 // reason to retreat - and only on the ground, which keeps it out of every planned arc for
 // the same reason the dodge is gated that way. It replaces the follower's horizontal keys
 // rather than being ORed with them, since pressing both directions at once is pressing
 // neither.
-subject = player.botTarget;
+//
+// After the engage hold, and it has to stay that way: the two disagree only between a
+// class's minimum band and its close-in distance, and there the retreat is right. A Pyro
+// closing on someone already standing in its own face should back off first and close
+// second, not alternate.
 if(subject != noone and char.onground and player.botVisible)
 {
     if(instance_exists(subject))

@@ -35,6 +35,8 @@
   <resource name="botFindAlly" type="RESOURCE"/>
   <resource name="botEnemyWithin" type="RESOURCE"/>
   <resource name="botMinesArmed" type="RESOURCE"/>
+  <resource name="botStepSafe" type="RESOURCE"/>
+  <resource name="botInBlastBeam" type="RESOURCE"/>
   <resource name="botIncomingProjectile" type="RESOURCE"/>
   <resource name="botRocketDodge" type="RESOURCE"/>
   <resource name="botIsCharacter" type="RESOURCE"/>
