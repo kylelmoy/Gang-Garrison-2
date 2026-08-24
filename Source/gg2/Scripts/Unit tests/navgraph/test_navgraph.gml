@@ -34,6 +34,7 @@ test_unit_begin();
 var nodes, edges, w, h, i;
 var oldMap, oldMd5, oldArea, oldSetup;
 var path, oldNodes, oldEdges, oldCount, oldEdgeCount, oldReady, testIdx, oldIdx;
+var djNodes, djEdges, djIdx;
 var oldRowStart, oldRowFor, oldRowForCount, testRow;
 
 // This suite may run against a server with a live nav graph. Every case below installs
@@ -742,6 +743,88 @@ global.navReady = false;
 ds_grid_destroy(gateIdx);
 ds_grid_destroy(gateEdges);
 ds_grid_destroy(gateNodes);
+
+// ---------------------------------------------------------------------------
+// The class gate: a NAV_EDGE_DOUBLEJUMP edge is offered only to a caller that says it
+// can double jump.
+//
+// One graph serves every class, so the Scout's second jump is carried in it with full
+// connectivity and refused per query - the same shape as the team gates above, with the
+// class in place of the team. Three nodes in a line: 0 -> 1 is an ordinary walk, 1 -> 2
+// is the only way on and it needs two impulses.
+//
+// The default matters as much as the gate. navFindPath's canDouble is argument6, and GM8
+// gives an unpassed argument 0, so every caller written before this - including most of
+// the assertions above - asks as a class that cannot. That is the conservative answer and
+// this pins it: the six-argument call must NOT find the route.
+// ---------------------------------------------------------------------------
+
+djNodes = ds_grid_create(NAV_NODE_FIELDS, 3);
+ds_grid_clear(djNodes, 0);
+ds_grid_set(djNodes, NAV_NODE_Y, 0, 15 - NAV_BOX_H);
+ds_grid_set(djNodes, NAV_NODE_X0, 0, 0);
+ds_grid_set(djNodes, NAV_NODE_X1, 0, 10);
+ds_grid_set(djNodes, NAV_NODE_Y, 1, 15 - NAV_BOX_H);
+ds_grid_set(djNodes, NAV_NODE_X0, 1, 11);
+ds_grid_set(djNodes, NAV_NODE_X1, 1, 20);
+ds_grid_set(djNodes, NAV_NODE_Y, 2, 3 - NAV_BOX_H);
+ds_grid_set(djNodes, NAV_NODE_X0, 2, 21);
+ds_grid_set(djNodes, NAV_NODE_X1, 2, 30);
+
+djEdges = ds_grid_create(NAV_EDGE_FIELDS, 2);
+ds_grid_clear(djEdges, 0);
+ds_grid_set(djEdges, NAV_EDGE_FROM, 0, 0);
+ds_grid_set(djEdges, NAV_EDGE_TO,   0, 1);
+ds_grid_set(djEdges, NAV_EDGE_TYPE, 0, NAV_EDGE_WALK);
+ds_grid_set(djEdges, NAV_EDGE_COST, 0, 11);
+ds_grid_set(djEdges, NAV_EDGE_GATE, 0, NAV_GATE_NONE);
+ds_grid_set(djEdges, NAV_EDGE_REJUMP, 0, -1);
+ds_grid_set(djEdges, NAV_EDGE_FROM, 1, 1);
+ds_grid_set(djEdges, NAV_EDGE_TO,   1, 2);
+ds_grid_set(djEdges, NAV_EDGE_TYPE, 1, NAV_EDGE_DOUBLEJUMP);
+ds_grid_set(djEdges, NAV_EDGE_COST, 1, 50);
+ds_grid_set(djEdges, NAV_EDGE_GATE, 1, NAV_GATE_NONE);
+ds_grid_set(djEdges, NAV_EDGE_REJUMP, 1, 14);
+
+global.navNodes = djNodes;
+global.navEdges = djEdges;
+global.navNodeCount = 3;
+global.navEdgeCount = 2;
+djIdx = navEdgeIndex(djEdges, 2, 3);
+global.navEdgeIdx = djIdx;
+global.navRowFor = -1;
+global.navRowForCount = 0;
+global.navReady = true;
+
+// A Scout gets the whole route.
+path = navFindPath(0, 2, TEAM_RED, false, -1, -1, true);
+test_assert_equals(true, path >= 0);
+test_assert_equals(3, ds_list_size(path));
+test_assert_equals(2, ds_list_find_value(path, 2));
+ds_list_destroy(path);
+
+// Anything else gets as far as the ledge and no further.
+test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, false, -1, -1, false));
+
+// ...but the walk that shares the graph with it is untouched.
+path = navFindPath(0, 1, TEAM_RED, false, -1, -1, false);
+test_assert_equals(true, path >= 0);
+test_assert_equals(2, ds_list_size(path));
+ds_list_destroy(path);
+
+// The six-argument call is the pre-existing one, and it must refuse.
+test_assert_equals(-1, navFindPath(0, 2, TEAM_RED, false, -1, -1));
+
+// The re-jump tick survives the round trip into the grid, and is -1 on everything that is
+// not a double jump. botPathKeys reads that -1 as "no second press", so a 0 here would put
+// an extra jump into every ordinary arc in the game.
+test_assert_equals(14, ds_grid_get(djEdges, NAV_EDGE_REJUMP, navEdgeFind(1, 2)));
+test_assert_equals(-1, ds_grid_get(djEdges, NAV_EDGE_REJUMP, navEdgeFind(0, 1)));
+
+global.navReady = false;
+ds_grid_destroy(djIdx);
+ds_grid_destroy(djEdges);
+ds_grid_destroy(djNodes);
 
 // ---------------------------------------------------------------------------
 // The cache key distinguishes internal maps, which all advertise an empty MD5.

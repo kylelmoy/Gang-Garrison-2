@@ -96,7 +96,20 @@
 /// argument the value 0, and 0 is a perfectly valid ds_map id, so a five-argument call would
 /// silently read whichever structure happens to own it.
 ///
-var startNode, goalNode, team, hasIntel, blocked, occupancy, openSet, gScore, cameFrom, closed;
+/// `canDouble` is the seventh argument and is the class half of the graph. A
+/// NAV_EDGE_DOUBLEJUMP edge is an arc that needs a second mid-air impulse, which only a
+/// character with canDoublejump has - the Scout, and nothing else in the roster. The graph
+/// is shared by every class, so those edges are carried in it with full connectivity and
+/// refused here per query, which is exactly the shape the gate codes above already use and
+/// for the same reason: one graph, many askers.
+///
+/// ⚠️ Refusing is the DEFAULT, and that is why an omitted argument is safe here where the
+/// header above warns against relying on one. GM8 gives an unpassed argument 0, and 0 is
+/// false: a caller that has not been taught about this - the unit suite, a hand-issued
+/// query - gets the pre-existing graph, which is the conservative answer. The failure mode
+/// of the opposite default is a Heavy routed over an arc it physically cannot fly.
+///
+var startNode, goalNode, team, hasIntel, blocked, occupancy, canDouble, openSet, gScore, cameFrom, closed;
 var current, nb, e, eStart, eCount, i, tentative, path, guard, cost, eKey;
 var gx, gy, cx, cy, nx, ny;
 
@@ -106,6 +119,7 @@ team = argument2;
 hasIntel = argument3;
 blocked = argument4;
 occupancy = argument5;
+canDouble = argument6;
 
 if(!global.navReady)
     return -1;
@@ -166,6 +180,16 @@ while(!ds_priority_empty(openSet))
         // improved; see the re-open below and the header for why skipping it is unsound.
         if(!navGatePassable(ds_grid_get(global.navEdges, NAV_EDGE_GATE, i), team, hasIntel))
             continue;
+
+        // The class gate. Its own if for the same reason every other test here is: GM8
+        // evaluates both sides of and/or unconditionally, and folding it in would buy
+        // nothing anyway - this is one grid read against a search that is already the
+        // most expensive thing a bot does.
+        if(!canDouble)
+        {
+            if(ds_grid_get(global.navEdges, NAV_EDGE_TYPE, i) == NAV_EDGE_DOUBLEJUMP)
+                continue;
+        }
 
         // Its own if, never folded in beside the handle test: GM8 evaluates both sides
         // of and/or unconditionally, so an inline "blocked < 0 or ds_map_exists(...)"

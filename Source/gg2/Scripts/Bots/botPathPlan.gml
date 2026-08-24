@@ -127,8 +127,14 @@ botOccupancyAdd(player, -1);
 // The blacklist and the team's occupancy map are the two per-query inputs. The blacklist is
 // private to this bot; the occupancy map is deliberately shared, because what it models -
 // bots bunching up - is a property of the team rather than of any one member of it.
+// canDoublejump is read off the Character rather than tested against CLASS_SCOUT,
+// because it is the field the game itself gates the second jump on (Character's Begin
+// Step) and Scout's Create event is the only thing that sets it. A class list here would
+// be a second copy of that fact, and the two would disagree the first time a class gained
+// or lost the ability.
 newPath = navFindPath(startNode, goalNode, player.team, char.intel,
-                      player.botBlacklist, botOccupancyMap(player.team));
+                      player.botBlacklist, botOccupancyMap(player.team),
+                      char.canDoublejump);
 player.botReplans += 1;
 
 if(newPath < 0)

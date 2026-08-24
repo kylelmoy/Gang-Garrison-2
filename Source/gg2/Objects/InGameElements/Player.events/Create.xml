@@ -71,6 +71,11 @@
     // would say, right up until terminal velocity pins it and every later tick reads
     // the same.
     botAirTicks = 0;
+    // Whether this bot has already spent the second jump on the arc it is flying. Only a
+    // NAV_EDGE_DOUBLEJUMP edge ever sets it; botPathKeys clears it on every takeoff, since
+    // the game gives the jump back on landing (Character's Begin Step zeroes
+    // doublejumpUsed while onground).
+    botRejumped = false;
     botBlacklist = -1;
     botBlacklistQ = -1;
     // Which edge last put the bot somewhere its route did not go, and how many times in
@@ -199,6 +204,12 @@
     // botSetGoal clears it, so it always belongs to the goal currently being followed.
     botArrivedAt = -1;
     botStuckFires = 0;
+    // How many second jumps this bot has spent on a NAV_EDGE_DOUBLEJUMP arc. The same kind
+    // of diagnostic as botReplans and botStuckFires beside it, and it exists for the same
+    // reason: whether a Scout ever actually takes one of those edges is a question about a
+    // running server, and every other way of asking it - watching one bot, sampling who is
+    // mid-arc - misses a manoeuvre that lasts under a second.
+    botDoubleJumps = 0;
     botBlacklistFires = 0;
     // What was blacklisted, not just how often - "off:251>254@1830,stk:254>255@1902",
     // reason:from>to@frame, comma separated and deliberately space-free so the scenario

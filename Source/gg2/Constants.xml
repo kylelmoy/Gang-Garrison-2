@@ -163,7 +163,7 @@
   <constant name="NAV_GATE_INTEL_RED" value="3"/>
   <constant name="NAV_GATE_INTEL_BLUE" value="4"/>
   <constant name="NAV_GATE_SETUP" value="5"/>
-  <constant name="NAV_EDGE_FIELDS" value="8"/>
+  <constant name="NAV_EDGE_FIELDS" value="9"/>
   <constant name="NAV_EDGE_FROM" value="0"/>
   <constant name="NAV_EDGE_TO" value="1"/>
   <constant name="NAV_EDGE_TYPE" value="2"/>
@@ -172,6 +172,7 @@
   <constant name="NAV_EDGE_COST" value="5"/>
   <constant name="NAV_EDGE_GATE" value="6"/>
   <constant name="NAV_EDGE_TAKEOFF" value="7"/>
+  <constant name="NAV_EDGE_REJUMP" value="8"/>
   <constant name="NAV_EDGE_WALK" value="0"/>
   <constant name="NAV_EDGE_FALL" value="1"/>
   <constant name="NAV_EDGE_JUMP" value="2"/>
@@ -180,7 +181,7 @@
   <constant name="NAV_EDGE_DOUBLEJUMP" value="5"/>
   <constant name="NAV_EDGE_ROCKETJUMP" value="6"/>
   <constant name="NAV_EDGE_STICKYJUMP" value="7"/>
-  <constant name="NAV_CACHE_VERSION" value="13"/>
+  <constant name="NAV_CACHE_VERSION" value="14"/>
   <constant name="NAV_BUILD_IDLE" value="0"/>
   <constant name="NAV_BUILD_DONE" value="9"/>
   <constant name="NAV_MAX_FALL" value="150"/>
@@ -195,6 +196,11 @@
   <constant name="NAV_JUMP_DIVERSITY_ROWS" value="6"/>
   <constant name="NAV_JUMP_TAKEOFF_TRIES" value="4"/>
   <constant name="NAV_JUMP_LAND_LEAD" value="2"/>
+  <constant name="NAV_DJ_MAX_TICKS" value="90"/>
+  <constant name="NAV_DJ_TICK_TRIES" value="5"/>
+  <constant name="NAV_DJ_MAX_PER_SIDE" value="2"/>
+  <constant name="NAV_DJ_PENALTY" value="12"/>
+  <constant name="NAV_DJ_SKIP_HOPS" value="3"/>
   <constant name="BOT_REPLAN_TICKS" value="45"/>
   <constant name="BOT_STUCK_TICKS" value="12"/>
   <constant name="BOT_OFFPATH_TICKS" value="20"/>

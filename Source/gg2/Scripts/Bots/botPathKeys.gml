@@ -28,7 +28,7 @@
 /// botJumpHeld alternates so a bot that still wants to jump gets a fresh press every
 /// other tick until it leaves the ground.
 
-var player, char, keys, here, size, cur, nxt, i, edgeRow, edgeType, found, moved;
+var player, char, keys, here, size, cur, nxt, i, edgeRow, edgeType, found, moved, rejumpAt;
 var mx, targetCol, tx, gx, n0, n1, c0, c1, takeoffCol, wantJump, dirToNext;
 var needVx, braking, tracking, flightTicks, jumpDist, jumpDir, jumpWantX, vAlong;
 var jumpNeed, landCol, takeoffLead;
@@ -576,6 +576,7 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
                 player.botAirTicks = 0;
                 player.botTakeoffTicks = 0;
                 player.botRunupAt = -1;
+                player.botRejumped = false;
             }
             // Faster than the arc allows. Worth bleeding off even though the tracker can
             // correct it: with no key held GG2 sheds horizontal speed by only about 13% a
@@ -621,6 +622,7 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
                 player.botAirTicks = 0;
                 player.botTakeoffTicks = 0;
                 player.botRunupAt = -1;
+                player.botRejumped = false;
             }
         }
         else if(player.botRunupAt >= 0)
@@ -662,6 +664,38 @@ else if(edgeType == NAV_EDGE_JUMP or edgeType == NAV_EDGE_DOUBLEJUMP)
     else
     {
         player.botAirTicks += 1;
+
+        // The second impulse, on a NAV_EDGE_DOUBLEJUMP arc. NAV_EDGE_REJUMP is the tick
+        // the generator proved the arc at, counted from takeoff the same way botAirTicks
+        // is, and -1 on every other edge kind - so this is inert for the other four
+        // without needing to test the type.
+        //
+        // ⚠️ It is a press, not a hold. Character's Begin Step takes the second jump on
+        // the RISING edge (pressedKeys & $80) and refuses it while vspeed <= -jumpStrength,
+        // so holding JUMP through the arc would consume the edge on the takeoff tick and
+        // there would be nothing left to press. The bit was released the moment wantJump
+        // went false at takeoff, which is what makes setting it again here an edge.
+        //
+        // botRejumped rather than a bare equality on the tick: >= with a once-only flag
+        // survives a tick that does not run this branch, where == would silently fly the
+        // arc as a single jump and land the bot somewhere the graph never said.
+        //
+        // canDoublejump is checked even though navFindPath will not hand these edges to
+        // anything else. A route outlives the plan that made it - a bot can change class
+        // mid-life while a path is still installed - and pressing JUMP in mid-air on a
+        // class that has no second jump is a wasted bit rather than a bug, but the arc it
+        // is flying is then a fiction and the sooner it fails the off-route test the
+        // better.
+        rejumpAt = ds_grid_get(global.navEdges, NAV_EDGE_REJUMP, edgeRow);
+        if(rejumpAt >= 0 and !player.botRejumped and char.canDoublejump)
+        {
+            if(player.botAirTicks >= rejumpAt)
+            {
+                wantJump = true;
+                player.botRejumped = true;
+                player.botDoubleJumps += 1;
+            }
+        }
 
         // Where the plan says to be now, clamped at the landing so a bot that is late
         // keeps pressing toward it rather than aiming past it.
