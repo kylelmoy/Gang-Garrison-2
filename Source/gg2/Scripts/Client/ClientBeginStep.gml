@@ -1,6 +1,10 @@
 // receive and interpret the server's message(s)
 var i, playerObject, playerID, player, otherPlayerID, otherPlayer, sameVersion, buffer, usePlugins;
 
+// Nothing more can be read correctly once the stream is out of step
+if(global.serverStreamBroken)
+    exit;
+
 if(tcp_eof(global.serverSocket)) {
     if(gotServerHello)
         show_message("You have been disconnected from the server.");
@@ -36,7 +40,11 @@ if(downloadingMap)
 roomchange = false;
 do {
     if(tcp_receive(global.serverSocket,1)) {
-        switch(read_ubyte(global.serverSocket)) {
+        var messageType;
+        messageType = read_ubyte(global.serverSocket);
+        global.recentServerMessages[global.recentServerMessageCount mod RECENT_SERVER_MESSAGES] = messageType;
+        global.recentServerMessageCount += 1;
+        switch(messageType) {
         case HELLO:
             gotServerHello = true;
             global.joinedServerName = receivestring(global.serverSocket, 1);
@@ -645,9 +653,11 @@ do {
             break;
 
         default:
-            promptRestartOrQuit("The Server sent unexpected data.");
+            clientProtocolError("The Server sent unexpected data (message id " + string(messageType) + ").");
             exit;
         }
+        if(global.serverStreamBroken)
+            exit;
     } else {
         break;
     }
