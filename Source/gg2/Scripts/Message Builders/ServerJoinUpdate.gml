@@ -15,4 +15,8 @@
     }
     
     serializeState(FULL_UPDATE, argument0);
+
+    // The round is over and the map is about to change; the other clients were told when it ended
+    if(global.mapchanging)
+        ServerMapEnd(global.nextMap, global.winners, global.nextMapArea, argument0);
 }

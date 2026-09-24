@@ -71,25 +71,23 @@ if(impendingMapChange > 0 and global.run_virtual_ticks)
 
 if(global.winners != -1 and !global.mapchanging)
 {
+    // currentMapArea must keep describing the running room until the map change:
+    // a player who joins before then is sent it and sets up the room with it.
     if(global.winners == TEAM_RED and global.currentMapArea < global.totalMapAreas)
     {
-        global.currentMapArea += 1;
+        global.nextMapArea = global.currentMapArea + 1;
         global.nextMap = global.currentMap;
     }
     else
     {
-        global.currentMapArea = 1;
+        global.nextMapArea = 1;
         global.nextMap = nextMapInRotation();
     }
     
     global.mapchanging = true;
     impendingMapChange = 300; // in 300 ticks (ten seconds), we'll do a map change
     
-    write_ubyte(global.sendBuffer, MAP_END);
-    write_ubyte(global.sendBuffer, string_length(global.nextMap));
-    write_string(global.sendBuffer, global.nextMap);
-    write_ubyte(global.sendBuffer, global.winners);
-    write_ubyte(global.sendBuffer, global.currentMapArea);
+    ServerMapEnd(global.nextMap, global.winners, global.nextMapArea, global.sendBuffer);
     
     if(!instance_exists(ScoreTableController))
         instance_create(0,0,ScoreTableController);
@@ -100,6 +98,7 @@ if(global.winners != -1 and !global.mapchanging)
 if(impendingMapChange == 0)
 {
     global.mapchanging = false;
+    global.currentMapArea = global.nextMapArea;
     serverGotoMap(global.nextMap);
     ServerChangeMap(global.currentMap, global.currentMapMD5, global.sendBuffer);
     impendingMapChange = -1;
