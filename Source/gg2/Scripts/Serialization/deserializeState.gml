@@ -25,6 +25,8 @@ if(argument0 != CAPS_UPDATE) {
         with(player) {
             event_user(13);
         }
+        if(global.serverStreamBroken)
+            exit;
     }
     
     with(MovingPlatform)

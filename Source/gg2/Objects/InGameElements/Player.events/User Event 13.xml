@@ -54,7 +54,10 @@
                 object = instance_create(0,0,charObj);
                 global.paramPlayer = noone;
             } else {
-                show_message("Invalid player object while deserializing");
+                // The character record's length depends on the class, so it cannot be skipped.
+                // Carrying on would run with(-1), i.e. this Player's own deserializer, on the character's bytes.
+                clientProtocolError("Invalid player object while deserializing (player " + string(ds_list_find_index(global.players, id)) + ", class " + string(class) + ").");
+                exit;
             }
         }
         with(object) event_user(13);
