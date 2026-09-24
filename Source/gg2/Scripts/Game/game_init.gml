@@ -81,7 +81,8 @@
     global.timeLimitMins = max(1, min(255, ini_read_real("Server", "Time Limit", 15)));
     global.serverPassword = ini_read_string("Server", "Password", "");
     global.dedicatedMode = ini_read_real("Server", "Dedicated", 0);
-    global.serverName = ini_read_string("Server", "ServerName", "My Server");
+    // Sent to joining clients with a 1-byte length
+    global.serverName = string_copy(ini_read_string("Server", "ServerName", "My Server"), 1, 255);
     global.welcomeMessage = ini_read_string("Server", "WelcomeMessage", "");
     global.caplimit = max(1, min(255, ini_read_real("Server", "CapLimit", 5)));
     global.caplimitBkup = global.caplimit;
