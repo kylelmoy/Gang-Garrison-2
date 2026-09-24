@@ -92,6 +92,7 @@
   <constant name="CHARACTER_ANIMATION_INTEL" value="2"/>
   <constant name="CHARACTER_ANIMATION_LEN" value="4"/>
   <constant name="MAX_PLAYERNAME_LENGTH" value="20"/>
+  <constant name="RECENT_SERVER_MESSAGES" value="16"/>
   <constant name="STATE_UPDATE" value="8"/>
   <constant name="KILLS" value="0"/>
   <constant name="DEATHS" value="1"/>
