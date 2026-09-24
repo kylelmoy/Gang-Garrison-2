@@ -9,8 +9,15 @@ if(argument0 == FULL_UPDATE) {
 }
 
 receiveCompleteMessage(global.serverSocket,1,global.tempBuffer);
-if(read_ubyte(global.tempBuffer) != ds_list_size(global.players))
-    show_message("Wrong number of players while deserializing state");
+var serverPlayerCount;
+serverPlayerCount = read_ubyte(global.tempBuffer);
+if(serverPlayerCount != ds_list_size(global.players))
+{
+    // Every player's record follows, so reading on with our own count would misread the rest of the stream
+    clientProtocolError("Wrong number of players while deserializing state (server "
+        + string(serverPlayerCount) + ", client " + string(ds_list_size(global.players)) + ").");
+    exit;
+}
 
 if(argument0 != CAPS_UPDATE) {
     for(i=0; i<ds_list_size(global.players); i+=1) {
