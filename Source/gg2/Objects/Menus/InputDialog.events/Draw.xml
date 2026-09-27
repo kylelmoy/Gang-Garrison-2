@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<event category="DRAW" id="0">
+  <actions>
+    <action id="603" library="1">
+      <!--action name: Code-->
+      <kind>CODE</kind>
+      <allowRelative>false</allowRelative>
+      <question>false</question>
+      <canApplyTo>true</canApplyTo>
+      <actionType>CODE</actionType>
+      <functionName/>
+      <relative>false</relative>
+      <not>false</not>
+      <appliesTo>.self</appliesTo>
+      <arguments>
+        <argument kind="STRING">var textY, caretX, bx, label, x1, y1, hover;
+
+if (!variable_local_exists("panelX"))
+    exit;
+
+draw_set_halign(fa_left);
+draw_set_valign(fa_middle);
+
+// Frame, with a title strip across the top
+draw_set_color(c_black);
+draw_set_alpha(0.8);
+draw_pinched_blackrect(panelX, panelY, panelWidth, panelHeight, 4, 1);
+draw_set_alpha(0.5);
+draw_pinched_blackrect(panelX + 6, panelY + 6, panelWidth - 12, 22, 4, false);
+draw_set_alpha(1);
+
+draw_set_color(c_white);
+draw_text(panelX + 14, panelY + 17, dialogTitle);
+
+// Close button: a pixel cross
+if (hoverClose)
+    draw_set_color(c_red);
+else
+    draw_set_color(c_white);
+for (bx = 0; bx &lt; 5; bx += 1)
+{
+    draw_rectangle(closeX1 + 3 + bx*2, closeY1 + 3 + bx*2, closeX1 + 4 + bx*2, closeY1 + 4 + bx*2, false);
+    draw_rectangle(closeX1 + 11 - bx*2, closeY1 + 3 + bx*2, closeX1 + 12 - bx*2, closeY1 + 4 + bx*2, false);
+}
+
+// Message
+draw_set_valign(fa_top);
+draw_set_color(c_white);
+draw_text_ext(panelX + 14, panelY + 38, dialogMessage, -1, panelWidth - 28);
+
+// Text field: sunken, so it is lit along the bottom and right edges - a white
+// pinched rectangle with the dark one laid over it a pixel up and to the left
+draw_set_color(c_white);
+draw_pinched_blackrect(fieldX1, fieldY1, fieldX2 - fieldX1 + 1, fieldY2 - fieldY1 + 1, 2, false);
+draw_set_color(make_color_rgb(24, 24, 24));
+draw_pinched_blackrect(fieldX1, fieldY1, fieldX2 - fieldX1, fieldY2 - fieldY1, 2, false);
+
+label = sanitiseNewlines(inputText);
+textY = floor((fieldY1 + fieldY2) / 2);
+draw_set_valign(fa_middle);
+draw_set_color(c_white);
+draw_text(fieldX1 + 6, textY, label);
+if (((current_time - caretStart) div 500) mod 2 == 0)
+{
+    caretX = fieldX1 + 6 + string_width(label) + 1;
+    draw_rectangle(caretX, textY - 6, caretX + 1, textY + 6, false);
+}
+
+// Buttons, like the menus' own: red while hovered
+draw_set_halign(fa_center);
+for (bx = 0; bx &lt; 2; bx += 1)
+{
+    if (bx == 0)
+    {
+        x1 = okX1;
+        label = "OK";
+        hover = hoverOk;
+    }
+    else
+    {
+        x1 = cancelX1;
+        label = "Cancel";
+        hover = hoverCancel;
+    }
+    y1 = buttonY1;
+
+    draw_set_color(c_black);
+    draw_set_alpha(0.5);
+    draw_pinched_blackrect(x1, y1, buttonWidth, buttonHeight, 4, 1);
+    draw_set_alpha(1);
+
+    if (hover)
+        draw_set_color(c_red);
+    else
+        draw_set_color(c_white);
+    draw_text(x1 + floor(buttonWidth / 2), y1 + floor(buttonHeight / 2), label);
+}
+
+draw_set_halign(fa_left);
+draw_set_valign(fa_top);
+draw_set_color(c_white);
+draw_set_alpha(1);
+</argument>
+      </arguments>
+    </action>
+  </actions>
+</event>

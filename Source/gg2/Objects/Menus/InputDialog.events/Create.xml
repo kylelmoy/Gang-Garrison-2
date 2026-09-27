@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<event category="CREATE" id="0">
+  <actions>
+    <action id="603" library="1">
+      <!--action name: Code-->
+      <kind>CODE</kind>
+      <allowRelative>false</allowRelative>
+      <question>false</question>
+      <canApplyTo>true</canApplyTo>
+      <actionType>CODE</actionType>
+      <functionName/>
+      <relative>false</relative>
+      <not>false</not>
+      <appliesTo>.self</appliesTo>
+      <arguments>
+        <argument kind="STRING">// A modal text prompt laid out like the Source engine's VGUI dialogs, drawn in the menus' style.
+// Open it with input_dialog_create, which fills in everything below.
+dialogTitle = "";
+dialogMessage = "";
+inputText = "";
+maxLength = 0;
+onClose = "";
+userData = 0;
+accepted = false;
+caretStart = current_time;
+
+panelWidth = 330;
+buttonWidth = 72;
+buttonHeight = 24;
+
+// Stop anything underneath from taking the typing meant for this dialog
+with (MenuController)
+    editing = -1;
+
+</argument>
+      </arguments>
+    </action>
+  </actions>
+</event>

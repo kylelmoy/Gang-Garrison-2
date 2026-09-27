@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<event category="STEP" id="1">
+  <actions>
+    <action id="603" library="1">
+      <!--action name: Code-->
+      <kind>CODE</kind>
+      <allowRelative>false</allowRelative>
+      <question>false</question>
+      <canApplyTo>true</canApplyTo>
+      <actionType>CODE</actionType>
+      <functionName/>
+      <relative>false</relative>
+      <not>false</not>
+      <appliesTo>.self</appliesTo>
+      <arguments>
+        <argument kind="STRING">var viewX, viewY, viewW, viewH, text, clean, i, c, mx, my;
+
+if (view_enabled)
+{
+    viewX = view_xview[0];
+    viewY = view_yview[0];
+    viewW = view_wview[0];
+    viewH = view_hview[0];
+}
+else
+{
+    viewX = 0;
+    viewY = 0;
+    viewW = room_width;
+    viewH = room_height;
+}
+
+// Layout, which depends on how far the message wraps
+messageHeight = string_height_ext(dialogMessage, -1, panelWidth - 28);
+panelHeight = 38 + messageHeight + 10 + 24 + 14 + buttonHeight + 14;
+
+panelX = viewX + floor((viewW - panelWidth) / 2);
+panelY = viewY + floor((viewH - panelHeight) / 2);
+
+fieldX1 = panelX + 14;
+fieldY1 = panelY + 38 + messageHeight + 10;
+fieldX2 = panelX + panelWidth - 14;
+fieldY2 = fieldY1 + 24;
+
+cancelX1 = panelX + panelWidth - 14 - buttonWidth;
+okX1 = cancelX1 - 6 - buttonWidth;
+buttonY1 = panelY + panelHeight - 14 - buttonHeight;
+
+closeX1 = panelX + panelWidth - 26;
+closeY1 = panelY + 8;
+
+// Typing
+if (keyboard_check_direct(vk_control) and keyboard_check_pressed(ord("V")))
+    keyboard_string += clipboard_get_text();
+
+text = keyboard_string;
+clean = "";
+for (i = 1; i &lt;= string_length(text); i += 1)
+{
+    c = string_char_at(text, i);
+    if (ord(c) &gt;= 32 and (maxLength &lt;= 0 or string_length(clean) &lt; maxLength))
+        clean += c;
+}
+if (clean != text)
+    keyboard_string = clean;
+if (clean != inputText)
+    caretStart = current_time; // Keep the caret solid while typing
+inputText = clean;
+
+// Hover, for drawing
+mx = mouse_x;
+my = mouse_y;
+hoverOk = (mx &gt;= okX1 and mx &lt; okX1 + buttonWidth and my &gt;= buttonY1 and my &lt; buttonY1 + buttonHeight);
+hoverCancel = (mx &gt;= cancelX1 and mx &lt; cancelX1 + buttonWidth and my &gt;= buttonY1 and my &lt; buttonY1 + buttonHeight);
+hoverClose = (mx &gt;= closeX1 and mx &lt; closeX1 + 16 and my &gt;= closeY1 and my &lt; closeY1 + 16);
+
+// The dialog is modal: it swallows every click and the keys the menus listen for,
+// so nothing underneath reacts while it is open
+if (mouse_check_button_pressed(mb_left))
+{
+    mouse_clear(mb_left);
+    if (hoverOk)
+    {
+        accepted = true;
+        event_user(0);
+        exit;
+    }
+    if (hoverCancel or hoverClose)
+    {
+        accepted = false;
+        event_user(0);
+        exit;
+    }
+}
+if (mouse_check_button_pressed(mb_right))
+    mouse_clear(mb_right);
+
+if (keyboard_check_pressed(vk_enter))
+{
+    keyboard_clear(vk_enter);
+    accepted = true;
+    event_user(0);
+    exit;
+}
+if (keyboard_check_pressed(vk_escape))
+{
+    keyboard_clear(vk_escape);
+    accepted = false;
+    event_user(0);
+    exit;
+}
+</argument>
+      </arguments>
+    </action>
+  </actions>
+</event>
