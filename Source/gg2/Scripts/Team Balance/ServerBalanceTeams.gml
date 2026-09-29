@@ -77,7 +77,7 @@ if (global.autobalance == 1 && !instance_exists(ArenaHUD) && global.winners == -
         write_ubyte(global.sendBuffer, ds_list_find_index(global.players, balanceplayer));
         write_ubyte(global.sendBuffer, balanceplayer.class);
         if !instance_exists(Balancer) instance_create(x,y,Balancer);
-        Balancer.name=player.name;
+        Balancer.name=balanceplayer.name;
         with (Balancer) notice=1;
     }
 } 
