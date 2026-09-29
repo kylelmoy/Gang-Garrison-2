@@ -221,9 +221,9 @@ while(commandLimitRemaining > 0) {
                 {
                     write_ubyte(global.sendBuffer, BUILD_SENTRY);
                     write_ubyte(global.sendBuffer, playerId);
-                    write_ushort(global.serializeBuffer, round(player.object.x*5));
-                    write_ushort(global.serializeBuffer, round(player.object.y*5));
-                    write_byte(global.serializeBuffer, player.object.image_xscale);
+                    write_ushort(global.sendBuffer, round(player.object.x*5));
+                    write_ushort(global.sendBuffer, round(player.object.y*5));
+                    write_byte(global.sendBuffer, player.object.image_xscale);
                     buildSentry(player, player.object.x, player.object.y, player.object.image_xscale);
                 }
             }
