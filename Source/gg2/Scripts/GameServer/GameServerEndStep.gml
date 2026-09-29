@@ -5,6 +5,15 @@ with(Player)
     if (id == global.myself) continue;
     
     write_buffer(socket, global.sendBuffer);
+    
+    // Everyone else was sent MAP_END when the round ended. It has to follow this player's
+    // own PLAYER_JOIN, which is in this broadcast, because the client's WinBanner reads global.myself.
+    if(pendingMapEnd)
+    {
+        if(global.mapchanging)
+            ServerMapEnd(global.nextMap, global.winners, global.nextMapArea, socket);
+        pendingMapEnd = false;
+    }
     socket_send(socket);
 }
 buffer_clear(global.sendBuffer);

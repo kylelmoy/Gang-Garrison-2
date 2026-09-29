@@ -122,6 +122,7 @@ case STATE_EXPECT_COMMAND:
         
         ds_list_add(global.players, player);
         ServerPlayerJoin(player.name, global.sendBuffer);
+        player.pendingMapEnd = global.mapchanging;
         
         if(global.welcomeMessage != "")
             ServerMessageString(global.welcomeMessage, player.socket);

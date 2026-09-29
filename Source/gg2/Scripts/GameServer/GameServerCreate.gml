@@ -112,6 +112,7 @@
 
     currentMapIndex = -1;
     global.currentMapArea = 1;
+    global.nextMapArea = 1;
     
     if(global.launchMap == "")
         serverGotoMap(nextMapInRotation());
